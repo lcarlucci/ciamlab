@@ -47,3 +47,5 @@ ENV API_PORT=3001
 ENV NODE_ENV production
 
 CMD ["yarn", "prod"]
+
+RUN yarn run dev
