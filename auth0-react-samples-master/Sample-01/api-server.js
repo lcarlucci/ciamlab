@@ -3,7 +3,9 @@ const cors = require("cors");
 const morgan = require("morgan");
 const helmet = require("helmet");
 const { auth } = require("express-oauth2-jwt-bearer");
-const authConfig = require("./src/auth_config.json");
+const path = require('path');
+const authConfig = require(path.join(__dirname, 'src', 'auth_config.json'));
+
 
 const app = express();
 
