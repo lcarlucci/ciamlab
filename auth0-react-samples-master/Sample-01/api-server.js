@@ -3,15 +3,21 @@ const cors = require("cors");
 const morgan = require("morgan");
 const helmet = require("helmet");
 const { auth } = require("express-oauth2-jwt-bearer");
-const path = require('path');
-const authConfig = require(path.join(__dirname, 'src', 'auth_config.json'));
+
+const authConfig = {
+  "domain": "identity-auth0.cic-demo-platform.auth0app.com",
+  "clientId": "7wnJfjn91fRLhs0CTzlCaMjPgUqXu7yv",
+  "audience": "https://identity-auth0.cic-demo-platform.auth0app.com/api/v2/",
+  "appOrigin": "https://ciamlab.onrender.com:3000",
+  "apiOrigin": "https://ciamlab.onrender.com:3001"
+}
 
 
 const app = express();
 
 const port = process.env.API_PORT || 3001;
 const appPort = process.env.SERVER_PORT || 3000;
-const appOrigin = authConfig.appOrigin || `http://localhost:${appPort}`;
+const appOrigin = authConfig.appOrigin || `https://ciamlab.onrender.com:${appPort}`;
 
 if (
   !authConfig.domain ||
