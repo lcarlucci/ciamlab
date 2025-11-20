@@ -15,7 +15,7 @@ describe("The ExternalApi component", () => {
     getConfig.mockReturnValue({
       domain: "test-domain.com",
       clientId: "123",
-      apiOrigin: "http://localhost:3001",
+      apiOrigin: "https://ciamlab.onrender.com/",
       audience: "test-audience",
     });
 

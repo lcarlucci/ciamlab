@@ -9,8 +9,8 @@ const authConfig = {
   domain: "identity-auth0.cic-demo-platform.auth0app.com",
   clientId: "7wnJfjn91fRLhs0CTzlCaMjPgUqXu7yv",
   audience: "https://identity-auth0.cic-demo-platform.auth0app.com/api/v2/",
-  appOrigin: "https://ciamlab.onrender.com",
-  apiOrigin: "https://ciamlab.onrender.com"
+  appOrigin: "http://localhost:10000/",
+  apiOrigin: "http://localhost:10000/"
 };
 
 const app = express();
