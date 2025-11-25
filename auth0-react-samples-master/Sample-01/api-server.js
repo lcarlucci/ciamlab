@@ -1,7 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
-//const helmet = require("helmet");
+const helmet = require("helmet");
 const path = require("path");
 const { auth } = require("express-oauth2-jwt-bearer");
 
@@ -29,7 +29,7 @@ if (!authConfig.domain || !authConfig.audience || authConfig.audience === "{API_
 app.use(morgan("dev"));
 //app.use(helmet()); <-- Originale
 //modifica
-/*app.use(
+app.use(
   helmet({
     contentSecurityPolicy: {
       directives: {
@@ -44,7 +44,7 @@ app.use(morgan("dev"));
       },
     },
   })
-);*/
+);
 //modifica
 app.use(cors({ origin: appOrigin }));
 
