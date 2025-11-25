@@ -27,7 +27,25 @@ if (!authConfig.domain || !authConfig.audience || authConfig.audience === "{API_
 }
 
 app.use(morgan("dev"));
-app.use(helmet());
+//app.use(helmet()); <-- Originale
+//modifica
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        connectSrc: [
+          "'self'",
+          "https://identity-auth0.cic-demo-platform.auth0app.com"
+        ],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:"],
+        styleSrc: ["'self'", "'unsafe-inline'"]
+      },
+    },
+  })
+);
+//modifica
 app.use(cors({ origin: appOrigin }));
 
 // Middleware per autenticazione JWT
