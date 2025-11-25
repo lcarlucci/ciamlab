@@ -1,173 +1,86 @@
-import React, { useState } from "react";
-import { NavLink as RouterNavLink } from "react-router-dom";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-
-import {
-  Collapse,
-  Container,
-  Navbar,
-  NavbarToggler,
-  NavbarBrand,
-  Nav,
-  NavItem,
-  NavLink,
-  Button,
-  UncontrolledDropdown,
-  DropdownToggle,
-  DropdownMenu,
-  DropdownItem,
-} from "reactstrap";
-
+import React from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 
 const NavBar = () => {
-  const [isOpen, setIsOpen] = useState(false);
-  const {
-    user,
-    isAuthenticated,
-    loginWithRedirect,
-    logout,
-  } = useAuth0();
-  const toggle = () => setIsOpen(!isOpen);
+  const { user, isAuthenticated, loginWithRedirect, logout } = useAuth0();
 
   const logoutWithRedirect = () =>
-    logout({
-        logoutParams: {
-          returnTo: window.location.origin,
-        }
-    });
+    logout({ logoutParams: { returnTo: window.location.origin } });
 
   return (
-    <div className="nav-container">
-      <Navbar color="light" light expand="md" container={false}>
-        <Container>
-          <NavbarBrand className="logo" />
-          <NavbarToggler onClick={toggle} />
-          <Collapse isOpen={isOpen} navbar>
-            <Nav className="mr-auto" navbar>
-              <NavItem>
-                <NavLink
-                  tag={RouterNavLink}
-                  to="/"
-                  exact
-                  activeClassName="router-link-exact-active"
-                >
-                  Home
-                </NavLink>
-              </NavItem>
-              {isAuthenticated && (
-                <NavItem>
-                  <NavLink
-                    tag={RouterNavLink}
-                    to="/external-api"
-                    exact
-                    activeClassName="router-link-exact-active"
-                  >
-                    External API
-                  </NavLink>
-                </NavItem>
-              )}
-            </Nav>
-            <Nav className="d-none d-md-block" navbar>
-              {!isAuthenticated && (
-                <NavItem>
-                  <Button
-                    id="qsLoginBtn"
-                    color="primary"
-                    className="btn-margin"
-                    onClick={() => loginWithRedirect()}
-                  >
-                    Log in
-                  </Button>
-                </NavItem>
-              )}
-              {isAuthenticated && (
-                <UncontrolledDropdown nav inNavbar>
-                  <DropdownToggle nav caret id="profileDropDown">
-                    <img
-                      src={user.picture}
-                      alt="Profile"
-                      className="nav-user-profile rounded-circle"
-                      width="50"
-                    />
-                  </DropdownToggle>
-                  <DropdownMenu>
-                    <DropdownItem header>{user.name}</DropdownItem>
-                    <DropdownItem
-                      tag={RouterNavLink}
-                      to="/profile"
-                      className="dropdown-profile"
-                      activeClassName="router-link-exact-active"
-                    >
-                      <FontAwesomeIcon icon="user" className="mr-3" /> Profile
-                    </DropdownItem>
-                    <DropdownItem
-                      id="qsLogoutBtn"
-                      onClick={() => logoutWithRedirect()}
-                    >
-                      <FontAwesomeIcon icon="power-off" className="mr-3" /> Log
-                      out
-                    </DropdownItem>
-                  </DropdownMenu>
-                </UncontrolledDropdown>
-              )}
-            </Nav>
-            {!isAuthenticated && (
-              <Nav className="d-md-none" navbar>
-                <NavItem>
-                  <Button
-                    id="qsLoginBtn"
-                    color="primary"
-                    block
-                    onClick={() => loginWithRedirect({})}
-                  >
-                    Log in
-                  </Button>
-                </NavItem>
-              </Nav>
-            )}
-            {isAuthenticated && (
-              <Nav
-                className="d-md-none justify-content-between"
-                navbar
-                style={{ minHeight: 170 }}
-              >
-                <NavItem>
-                  <span className="user-info">
-                    <img
-                      src={user.picture}
-                      alt="Profile"
-                      className="nav-user-profile d-inline-block rounded-circle mr-3"
-                      width="50"
-                    />
-                    <h6 className="d-inline-block">{user.name}</h6>
-                  </span>
-                </NavItem>
-                <NavItem>
-                  <FontAwesomeIcon icon="user" className="mr-3" />
-                  <RouterNavLink
-                    to="/profile"
-                    activeClassName="router-link-exact-active"
-                  >
-                    Profile
-                  </RouterNavLink>
-                </NavItem>
-                <NavItem>
-                  <FontAwesomeIcon icon="power-off" className="mr-3" />
-                  <RouterNavLink
-                    to="#"
-                    id="qsLogoutBtn"
-                    onClick={() => logoutWithRedirect()}
-                  >
-                    Log out
-                  </RouterNavLink>
-                </NavItem>
-              </Nav>
-            )}
-          </Collapse>
-        </Container>
-      </Navbar>
-    </div>
+    <header style={{
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: "20px 40px",
+      background: "white",
+      boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
+    }}>
+      {/* LOGO */}
+      <div className="logo">
+        <img
+          src="https://logodownload.org/wp-content/uploads/2019/10/deloitte-logo.png"
+          alt="Deloitte Logo"
+          style={{ height: "40px" }}
+        />
+      </div>
+
+      {/* LOGIN / USER INFO */}
+      <div>
+        {!isAuthenticated && (
+          <button
+            onClick={() => loginWithRedirect()}
+            style={{
+              backgroundColor: "#86BC25",
+              color: "#fff",
+              padding: "15px 30px",
+              borderRadius: "8px",
+              fontWeight: "bold",
+              fontSize: "1.1rem",
+              border: "none",
+              cursor: "pointer",
+              transition: "0.3s"
+            }}
+            onMouseOver={(e) => (e.target.style.backgroundColor = "#6a961d")}
+            onMouseOut={(e) => (e.target.style.backgroundColor = "#86BC25")}
+          >
+            Login
+          </button>
+        )}
+
+        {isAuthenticated && (
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "20px"
+          }}>
+            <span style={{ fontWeight: "bold" }}>{user.name}</span>
+            <img
+              src={user.picture}
+              alt="Profile"
+              style={{
+                width: "45px",
+                height: "45px",
+                borderRadius: "50%"
+              }}
+            />
+            <button
+              onClick={logoutWithRedirect}
+              style={{
+                backgroundColor: "#333",
+                color: "#fff",
+                padding: "10px 20px",
+                borderRadius: "8px",
+                border: "none",
+                cursor: "pointer"
+              }}
+            >
+              Logout
+            </button>
+          </div>
+        )}
+      </div>
+    </header>
   );
 };
 
