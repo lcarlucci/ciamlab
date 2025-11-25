@@ -29,7 +29,7 @@ if (!authConfig.domain || !authConfig.audience || authConfig.audience === "{API_
 app.use(morgan("dev"));
 //app.use(helmet()); <-- Originale
 //modifica
-/*app.use(
+app.use(
   helmet({
     contentSecurityPolicy: {
       directives: {
@@ -44,7 +44,7 @@ app.use(morgan("dev"));
       },
     },
   })
-);*/
+);
 //modifica
 app.use(cors({ origin: appOrigin }));
 
