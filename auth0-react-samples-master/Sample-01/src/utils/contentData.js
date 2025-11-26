@@ -1,9 +1,9 @@
 const contentData = [
   {
-    title: "Example",
+    title: "",
     link: "",
     description:
-      "Example"
+      ""
   }
 ];
 

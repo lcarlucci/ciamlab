@@ -1,6 +1,7 @@
 import React from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import styles from "./style/NavBar.module.css";
+import logo from "../assets/logo.svg"
 
 const NavBar = () => {
   const { user, isAuthenticated, loginWithRedirect, logout } = useAuth0();
@@ -12,7 +13,7 @@ const NavBar = () => {
     <header className={styles.header}>
       <div className={styles.logo}>
         <img
-          src="https://logodownload.org/wp-content/uploads/2019/10/deloitte-logo.png"
+          src={logo}
           alt="Deloitte Logo"
         />
       </div>
