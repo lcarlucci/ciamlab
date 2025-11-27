@@ -1,5 +1,9 @@
 import React from "react";
 import "./style/Hero.css";
+import CIAM from "../assets/CIAM.png"
+import PAM from "../assets/PAM.png"
+import AM from "../assets/AM.png"
+import IM from "../assets/IM.png"
 
 const Hero = () => {
   return (
@@ -18,7 +22,7 @@ const Hero = () => {
 
         <div className="info-card">
           <img
-            src="https://tse2.mm.bing.net/th/id/OIP.l0KI0KE3kUum8QuS-NbhYAHaEJ?pid=Api"
+            src={IM}
             alt="Identity Management"
           />
           <h3>Identity Management</h3>
@@ -31,7 +35,7 @@ const Hero = () => {
 
         <div className="info-card">
           <img
-            src="https://tse3.mm.bing.net/th/id/OIP.rXqVK66sS2TgLW0IU3wz7AHaFY?pid=Api"
+            src={AM}
             alt="Access Management"
           />
           <h3>Access Management</h3>
@@ -44,7 +48,7 @@ const Hero = () => {
 
         <div className="info-card">
           <img
-            src="https://tse1.mm.bing.net/th/id/OIP.uZ2om3hPucUXAdejV_UWjwHaEw?pid=Api"
+            src={PAM}
             alt="Privileged Access Management"
           />
           <h3>Privileged Access Management</h3>
@@ -56,7 +60,7 @@ const Hero = () => {
 
         <div className="info-card">
           <img
-            src="https://tse4.mm.bing.net/th/id/OIP.nKjuv8VXyH6G7QOGj7YQzgHaFf?pid=Api"
+            src={CIAM}
             alt="Customer IAM"
           />
           <h3>CIAM</h3>
