@@ -1,11 +1,12 @@
 import React, { useState } from "react";
-import styles from "./style/MainPageAfterLogin.css";
 import { useAuth0 } from "@auth0/auth0-react";
+import "./style/MainPageAfterLogin.css";
 
 const MainPageAfterLogin = () => {
   const { user } = useAuth0();
   const [cart, setCart] = useState([]);
   const [cartVisible, setCartVisible] = useState(false);
+  const [activeCategory, setActiveCategory] = useState("idg");
 
   const categories = [
     { id: "idg", label: "Identity Governance", tooltip: "Manage user lifecycle, compliance and identity policies." },
@@ -14,41 +15,28 @@ const MainPageAfterLogin = () => {
     { id: "ciam", label: "CIAM", tooltip: "Customer login, registration, and self-service profiles." },
   ];
 
-  const [activeCategory, setActiveCategory] = useState("idg");
-
   const servicesData = {
     idg: [
-      { title: "User Lifecycle Management", description: "Create, modify and deactivate user accounts across systems.", users: 5000 },
-      { title: "Access Certification", description: "Periodic review of user access rights to ensure compliance.", users: 1000 },
+      { title: "User Lifecycle Management", description: "Create, modify and deactivate user accounts.", users: 5000 },
+      { title: "Access Certification", description: "Periodic review of user access rights.", users: 1000 },
     ],
-    am: [
-      { title: "Role-Based Access Control", description: "Define roles and enforce policies for enterprise resources.", users: 5000 },
-    ],
-    pam: [
-      { title: "Just-In-Time Access", description: "Grant privileged access only when needed for limited time.", users: 200 },
-    ],
-    ciam: [
-      { title: "Customer Registration & Login", description: "Secure and seamless registration and login for customers.", users: 10000 },
-    ],
+    am: [{ title: "Role-Based Access Control", description: "Define roles and enforce policies.", users: 5000 }],
+    pam: [{ title: "Just-In-Time Access", description: "Grant privileged access only when needed.", users: 200 }],
+    ciam: [{ title: "Customer Registration & Login", description: "Secure customer authentication.", users: 10000 }],
   };
 
   const addToCart = (service, implType, userCount) => {
     const item = `${service} (${implType}, ${userCount} users)`;
-    if (!cart.includes(item)) {
-      setCart([...cart, item]);
-    }
+    if (!cart.includes(item)) setCart([...cart, item]);
   };
 
-  const removeFromCart = (item) => {
-    setCart(cart.filter(i => i !== item));
-  };
+  const removeFromCart = (item) => setCart(cart.filter(i => i !== item));
 
   return (
-    <div className={styles["main-container"]}>
-      <h2 className={styles["welcome-title"]}>Welcome, {user.name}!</h2>
+    <div className="main-container">
+      <h2 className="welcome-title">Welcome, {user.name}!</h2>
 
-      {/* Categorie */}
-      <nav className={styles["service-menu"]}>
+      <nav className="service-menu">
         <ul>
           {categories.map(cat => (
             <li
@@ -63,22 +51,14 @@ const MainPageAfterLogin = () => {
         </ul>
       </nav>
 
-      {/* Catalogo Servizi */}
-      <section className={styles["services-catalog"]}>
+      <section className="services-catalog">
         {servicesData[activeCategory].map((service, index) => (
-          <div key={index} className={styles["service-card"]}>
+          <div key={index} className="service-card">
             <h3>{service.title}</h3>
             <p>{service.description}</p>
-            <div className={styles["service-config"]}>
+            <div className="service-config">
               <label>Users impacted:</label>
-              <input
-                type="range"
-                min="1"
-                max="1000000"
-                step="1000"
-                defaultValue={service.users}
-                onInput={(e) => e.target.nextSibling.textContent = e.target.value}
-              />
+              <input type="range" min="1" max="1000000" step="1000" defaultValue={service.users} />
               <span>{service.users}</span>
               <label>Implementation type:</label>
               <select>
@@ -87,31 +67,23 @@ const MainPageAfterLogin = () => {
                 <option>Evolution</option>
               </select>
             </div>
-            <button onClick={() => {
-              const implType = service.title; // puoi cambiare se vuoi
-              const userCount = service.users;
-              addToCart(service.title, "New Implementation", userCount);
-            }}>Add to Cart</button>
+            <button onClick={() => addToCart(service.title, "New Implementation", service.users)}>Add to Cart</button>
           </div>
         ))}
       </section>
 
-      {/* Carrello */}
-      <div className={`${styles["cart-panel"]} ${cartVisible ? "show" : ""}`}>
+      <div className={`cart-panel ${cartVisible ? "show" : ""}`}>
         <h3>My Cart</h3>
-        <div>
-          {cart.map((item, idx) => (
-            <div key={idx} className={styles["cart-item"]}>
-              <span>{item}</span>
-              <button onClick={() => removeFromCart(item)}>Remove</button>
-            </div>
-          ))}
-        </div>
-        <button className={styles.proceed} onClick={() => alert("Proceed to checkout")}>Proceed</button>
+        {cart.map((item, idx) => (
+          <div key={idx} className="cart-item">
+            <span>{item}</span>
+            <button onClick={() => removeFromCart(item)}>Remove</button>
+          </div>
+        ))}
+        <button className="proceed" onClick={() => alert("Proceed to checkout")}>Proceed</button>
       </div>
 
-      {/* Toggle carrello */}
-      <button className={styles["cart-toggle-btn"]} onClick={() => setCartVisible(!cartVisible)}>
+      <button className="cart-toggle-btn" onClick={() => setCartVisible(!cartVisible)}>
         🛒 {cart.length}
       </button>
     </div>

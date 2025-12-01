@@ -1,15 +1,15 @@
 import React from "react";
-import { Container, Row, Col } from "reactstrap";
-import Loading from "../components/Loading";
 import { useAuth0, withAuthenticationRequired } from "@auth0/auth0-react";
+import Loading from "../components/Loading";
+import "./css/Profile.css";
 
-const DEBUG_BYPASS_AUTH = false; // <--- attiva/disattiva autenticazione
+const DEBUG_BYPASS_AUTH = false;
 
 export const ProfileComponent = () => {
   const { user } = useAuth0();
 
   const mockUser = {
-    picture: "https://via.placeholder.com/150",
+    picture: process.env.PUBLIC_URL + "/assets/placeholder.png",
     name: "Test User",
     email: "test@domain.com",
   };
@@ -17,26 +17,22 @@ export const ProfileComponent = () => {
   const currentUser = DEBUG_BYPASS_AUTH ? mockUser : user;
 
   return (
-    <Container className="mb-5">
-      <Row className="align-items-center profile-header mb-5 text-center text-md-left">
-        <Col md={2}>
-          <img
-            src={currentUser.picture}
-            alt="Profile"
-            className="rounded-circle img-fluid profile-picture mb-3 mb-md-0"
-          />
-        </Col>
-        <Col md>
+    <div className="profile-container">
+      <div className="profile-header">
+        <img
+          src={currentUser.picture}
+          alt="Profile"
+          className="profile-picture"
+        />
+        <div className="profile-info">
           <h2>{currentUser.name}</h2>
-          <p className="lead text-muted">{currentUser.email}</p>
-        </Col>
-      </Row>
-
-    </Container>
+          <p>{currentUser.email}</p>
+        </div>
+      </div>
+    </div>
   );
 };
 
 export default withAuthenticationRequired(ProfileComponent, {
   onRedirecting: () => <Loading />,
 });
-

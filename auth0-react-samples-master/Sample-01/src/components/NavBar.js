@@ -9,7 +9,7 @@ const Navbar = () => {
     <header className={styles.header}>
       <div className={styles.logo}>
         <img
-          src="https://logodownload.org/wp-content/uploads/2019/10/deloitte-logo.png"
+          src={process.env.PUBLIC_URL + "/assets/Deloitteicon.png"}
           alt="Logo"
         />
       </div>
@@ -18,7 +18,11 @@ const Navbar = () => {
         {isAuthenticated ? (
           <>
             <span className={styles.userName}>{user.name}</span>
-            <img className={styles.userPic} src={user.picture} alt="Profile" />
+            <img
+              className={styles.userPic}
+              src={user.picture || process.env.PUBLIC_URL + "/assets/placeholder.png"}
+              alt="Profile"
+            />
             <button
               className={styles.logoutBtn}
               onClick={() => logout({ returnTo: window.location.origin })}
