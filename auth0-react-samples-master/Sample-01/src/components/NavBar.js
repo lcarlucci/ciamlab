@@ -1,40 +1,39 @@
 import React from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import styles from "./style/NavBar.module.css";
-import logo from "../assets/logo.svg"
 
-const NavBar = () => {
-  const { user, isAuthenticated, loginWithRedirect, logout } = useAuth0();
-
-  const logoutWithRedirect = () =>
-    logout({ logoutParams: { returnTo: window.location.origin } });
+const Navbar = () => {
+  const { user, loginWithRedirect, logout, isAuthenticated } = useAuth0();
 
   return (
     <header className={styles.header}>
       <div className={styles.logo}>
         <img
-          src={logo}
-          alt="Deloitte Logo"
+          src="https://logodownload.org/wp-content/uploads/2019/10/deloitte-logo.png"
+          alt="Logo"
         />
       </div>
 
-      {!isAuthenticated && (
-        <button className={styles.loginBtn} onClick={() => loginWithRedirect()}>
-          Login
-        </button>
-      )}
-
-      {isAuthenticated && (
-        <div className={styles.userInfo}>
-          <span className={styles.userName}>{user.name}</span>
-          <img className={styles.userPic} src={user.picture} alt="Profile" />
-          <button className={styles.logoutBtn} onClick={logoutWithRedirect}>
-            Logout
+      <div className={styles.userInfo}>
+        {isAuthenticated ? (
+          <>
+            <span className={styles.userName}>{user.name}</span>
+            <img className={styles.userPic} src={user.picture} alt="Profile" />
+            <button
+              className={styles.logoutBtn}
+              onClick={() => logout({ returnTo: window.location.origin })}
+            >
+              Logout
+            </button>
+          </>
+        ) : (
+          <button className={styles.loginBtn} onClick={() => loginWithRedirect()}>
+            Login
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </header>
   );
 };
 
-export default NavBar;
+export default Navbar;
