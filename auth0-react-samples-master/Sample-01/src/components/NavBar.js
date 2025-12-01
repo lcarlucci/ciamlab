@@ -1,9 +1,11 @@
 import React from "react";
 import { useAuth0 } from "@auth0/auth0-react";
+import { useNavigate } from "react-router-dom";
 import styles from "./style/NavBar.module.css";
 
 const Navbar = () => {
   const { user, loginWithRedirect, logout, isAuthenticated } = useAuth0();
+  const navigate = useNavigate();
 
   return (
     <header className={styles.header}>
@@ -17,11 +19,19 @@ const Navbar = () => {
       <div className={styles.userInfo}>
         {isAuthenticated ? (
           <>
-            <span className={styles.userName}>{user.name}</span>
+            <span
+              className={styles.userName}
+              onClick={() => navigate("/profile")}
+              style={{ cursor: "pointer" }}
+            >
+              {user.name}
+            </span>
             <img
               className={styles.userPic}
               src={user.picture || process.env.PUBLIC_URL + "/assets/placeholder.png"}
               alt="Profile"
+              onClick={() => navigate("/profile")}
+              style={{ cursor: "pointer" }}
             />
             <button
               className={styles.logoutBtn}

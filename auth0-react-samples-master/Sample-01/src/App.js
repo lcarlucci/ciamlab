@@ -1,5 +1,5 @@
 import React from "react";
-import { Router, Route, Switch } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { Container } from "reactstrap";
 
 import Loading from "./components/Loading";
@@ -10,7 +10,6 @@ import Profile from "./views/Profile";
 import MainPageAfterLogin from "./components/MainPageAfterLogin";
 import ExternalApi from "./views/ExternalApi";
 import { useAuth0 } from "@auth0/auth0-react";
-import history from "./utils/history";
 
 // styles
 import "./App.css";
@@ -31,17 +30,18 @@ const App = () => {
   }
 
   return (
-    <Router history={history}>
+    <Router>
       <div id="app" className="d-flex flex-column h-100">
         <NavBar />
         <Container className="flex-grow-1 mt-5 px-0">
-          <Switch>
-            <Route path="/" exact>
-              {isAuthenticated ? <MainPageAfterLogin /> : <Home />}
-            </Route>
-            <Route path="/profile" component={Profile} />
-            <Route path="/external-api" component={ExternalApi} />
-          </Switch>
+          <Routes>
+            <Route
+              path="/"
+              element={isAuthenticated ? <MainPageAfterLogin /> : <Home />}
+            />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/external-api" element={<ExternalApi />} />
+          </Routes>
         </Container>
         <Footer />
       </div>
