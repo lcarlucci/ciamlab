@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { Routes, Route } from "react-router-dom"; // non Router qui
 import { Container } from "reactstrap";
 
 import Loading from "./components/Loading";
@@ -30,22 +30,20 @@ const App = () => {
   }
 
   return (
-    <Router>
-      <div id="app" className="d-flex flex-column h-100">
-        <NavBar />
-        <Container className="flex-grow-1 mt-5 px-0">
-          <Routes>
-            <Route
-              path="/"
-              element={isAuthenticated ? <MainPageAfterLogin /> : <Home />}
-            />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/external-api" element={<ExternalApi />} />
-          </Routes>
-        </Container>
-        <Footer />
-      </div>
-    </Router>
+    <div id="app" className="d-flex flex-column h-100">
+      <NavBar />
+      <Container className="flex-grow-1 mt-5 px-0">
+        <Routes>
+          <Route
+            path="/"
+            element={isAuthenticated ? <MainPageAfterLogin /> : <Home />}
+          />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/external-api" element={<ExternalApi />} />
+        </Routes>
+      </Container>
+      <Footer />
+    </div>
   );
 };
 
