@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 
 const services = {
   idg: [
@@ -13,26 +13,36 @@ const services = {
 const ServicesCatalog = ({ category, addToCart }) => {
   return (
     <section className="services-catalog">
-      {services[category].map((service, idx) => (
-        <div key={idx} className="service-card">
-          <h3>{service.title}</h3>
-          <p>Configure your service details here.</p>
-          <div className="service-config">
-            <label>Users impacted:</label>
-            <input type="range" min="1" max="1000000" step="1000" value={service.users} readOnly />
-            <span>{service.users}</span>
-            <label>Implementation type:</label>
-            <select>
-              <option>New Implementation</option>
-              <option>Migration from existing</option>
-              <option>Evolution</option>
-            </select>
+      {services[category].map((service, idx) => {
+        const [userCount, setUserCount] = useState(service.users);
+        const [implementation, setImplementation] = useState("New Implementation");
+
+        return (
+          <div key={idx} className="service-card">
+            <h3>{service.title}</h3>
+            <p>Configure your service details here.</p>
+            <div className="service-config">
+              <label>Users impacted:</label>
+              <input
+                type="range"
+                min="1"
+                max="1000000"
+                step="1000"
+                value={userCount}
+                onChange={(e) => setUserCount(e.target.value)}
+              />
+              <span>{userCount}</span>
+              <label>Implementation type:</label>
+              <select value={implementation} onChange={(e) => setImplementation(e.target.value)}>
+                <option>New Implementation</option>
+                <option>Migration from existing</option>
+                <option>Evolution</option>
+              </select>
+            </div>
+            <button onClick={() => addToCart(`${service.title} (${implementation}, ${userCount} users)`)}>Add to Cart</button>
           </div>
-          <button onClick={() => addToCart(`${service.title} (${service.users} users)`)}>
-            Add to Cart
-          </button>
-        </div>
-      ))}
+        );
+      })}
     </section>
   );
 };
