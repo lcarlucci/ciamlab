@@ -9,12 +9,15 @@ import { getConfig } from "./config";
 const config = getConfig();
 
 const root = createRoot(document.getElementById("root"));
+
 root.render(
   <BrowserRouter>
     <Auth0Provider
       domain={config.domain}
       clientId={config.clientId}
-      authorizationParams={{ redirect_uri: window.location.origin }}
+      authorizationParams={{
+        redirect_uri: window.location.origin,
+      }}
       onRedirectCallback={(appState) => {
         window.location.replace(appState?.returnTo || "/");
       }}
