@@ -16,17 +16,17 @@ import initFontAwesome from "./utils/initFontAwesome";
 initFontAwesome();
 
 const App = () => {
-  const { error } = useAuth0();
+  const { error, isLoading } = useAuth0();
 
   if (error) return <div>Oops... {error.message}</div>;
+  if (isLoading) return <div>Loading...</div>;
 
   return (
     <div id="app" className="d-flex flex-column h-100">
       <NavBar />
-
       <Container className="flex-grow-1 mt-5 px-0">
         <Routes>
-          {/* Pagina protetta */}
+          {/* Rotte protette */}
           <Route
             path="/home"
             element={
@@ -51,11 +51,10 @@ const App = () => {
               </ProtectedRoute>
             }
           />
-          {/* Vetrina pubblica */}
+          {/* Rotta pubblica: vetrina */}
           <Route path="/" element={<Home />} />
         </Routes>
       </Container>
-
       <Footer />
     </div>
   );

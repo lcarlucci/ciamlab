@@ -5,14 +5,8 @@ import Loading from "./Loading";
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth0();
 
-  if (isLoading) {
-    return <Loading />;
-  }
-
-  if (!isAuthenticated) {
-    // Non fare login automatico qui, lascia la gestione del login al pulsante nella navbar
-    return <Loading />; 
-  }
+  if (isLoading) return <Loading />;  // Mostra loader finché Auth0 verifica
+  if (!isAuthenticated) return <Loading />; // Non fare login automatico qui, Navbar gestisce login
 
   return children;
 };

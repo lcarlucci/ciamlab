@@ -14,9 +14,11 @@ root.render(
       domain={config.domain}
       clientId={config.clientId}
       authorizationParams={{ redirect_uri: window.location.origin }}
-      onRedirectCallback={(appState) => {
-        // Usa navigate di React Router solo quando appState.returnTo è settato
-        window.history.replaceState({}, "", appState?.returnTo || "/home");
+      cacheLocation="localstorage"      // Mantiene la sessione anche su refresh
+      useRefreshTokens={true}           // Rinnova automaticamente i token
+      onRedirectCallback={() => {
+        // Dopo il login, vai sempre su /home
+        window.location.replace("/home");
       }}
     >
       <App />

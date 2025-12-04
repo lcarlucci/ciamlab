@@ -44,11 +44,9 @@ const Navbar = () => {
           <button
             className={styles.loginBtn}
             onClick={() =>
-            loginWithRedirect({
-            appState: { returnTo: "/home" },
-        })
-      }
->
+              loginWithRedirect({ appState: { returnTo: "/home" } })
+            }
+          >
             Login
           </button>
         )}
