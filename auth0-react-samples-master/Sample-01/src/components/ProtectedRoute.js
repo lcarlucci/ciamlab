@@ -1,25 +1,17 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import Loading from "./Loading";
 
 const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, isLoading, loginWithRedirect } = useAuth0();
-  const [triedLogin, setTriedLogin] = useState(false);
+  const { isAuthenticated, isLoading } = useAuth0();
 
-  useEffect(() => {
-    // Aspetta che isLoading sia false e non abbia già tentato login
-    if (!isLoading && !isAuthenticated && !triedLogin) {
-      setTriedLogin(true);
-      loginWithRedirect({ appState: { returnTo: "/home" } });
-    }
-  }, [isLoading, isAuthenticated, triedLogin, loginWithRedirect]);
-
-  if (isLoading || (!isAuthenticated && !triedLogin)) {
+  if (isLoading) {
     return <Loading />;
   }
 
   if (!isAuthenticated) {
-    return null; // Evita render prematuro
+    // Non fare login automatico qui, lascia la gestione del login al pulsante nella navbar
+    return <Loading />; 
   }
 
   return children;

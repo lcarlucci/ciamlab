@@ -18,9 +18,7 @@ initFontAwesome();
 const App = () => {
   const { error } = useAuth0();
 
-  if (error) {
-    return <div>Oops... {error.message}</div>;
-  }
+  if (error) return <div>Oops... {error.message}</div>;
 
   return (
     <div id="app" className="d-flex flex-column h-100">
@@ -28,7 +26,7 @@ const App = () => {
 
       <Container className="flex-grow-1 mt-5 px-0">
         <Routes>
-          {/* Pagina dove atterra chi ha fatto login */}
+          {/* Pagina protetta */}
           <Route
             path="/home"
             element={
@@ -37,7 +35,6 @@ const App = () => {
               </ProtectedRoute>
             }
           />
-
           <Route
             path="/profile"
             element={
@@ -46,7 +43,6 @@ const App = () => {
               </ProtectedRoute>
             }
           />
-
           <Route
             path="/external-api"
             element={
@@ -55,8 +51,7 @@ const App = () => {
               </ProtectedRoute>
             }
           />
-
-          {/* Vetrina (pubblica) */}
+          {/* Vetrina pubblica */}
           <Route path="/" element={<Home />} />
         </Routes>
       </Container>

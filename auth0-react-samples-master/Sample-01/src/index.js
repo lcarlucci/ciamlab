@@ -5,21 +5,18 @@ import App from "./App";
 import { Auth0Provider } from "@auth0/auth0-react";
 import { getConfig } from "./config";
 
-// Config Auth0
 const config = getConfig();
 
 const root = createRoot(document.getElementById("root"));
-
 root.render(
   <BrowserRouter>
     <Auth0Provider
       domain={config.domain}
       clientId={config.clientId}
-      authorizationParams={{
-        redirect_uri: window.location.origin,
-      }}
+      authorizationParams={{ redirect_uri: window.location.origin }}
       onRedirectCallback={(appState) => {
-        window.location.replace(appState?.returnTo || "/");
+        // Usa navigate di React Router solo quando appState.returnTo è settato
+        window.history.replaceState({}, "", appState?.returnTo || "/home");
       }}
     >
       <App />
