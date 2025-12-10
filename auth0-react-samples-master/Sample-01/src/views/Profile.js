@@ -20,7 +20,7 @@ export const ProfileComponent = () => {
     <div className="profile-container">
       <div className="profile-header">
         <img
-          src={currentUser.picture}
+          src={currentUser?.picture || "/assets/placeholder.png"}
           alt="Profile"
           className="profile-picture"
         />

@@ -1,12 +1,21 @@
 import React from "react";
 
-const Footer = () => (
-  <footer className="bg-light p-3 text-center">
-    <div className="logo" />
-    <p>
-      Sample project provided by <a href="https://deloitte.com">Deliotte</a>
-    </p>
-  </footer>
-);
+const Footer = () => {
+  return (
+    <footer style={styles.footer}>
+      © Deloitte – Cyber & IAM Services Portal
+    </footer>
+  );
+};
+
+const styles = {
+  footer: {
+    textAlign: "center",
+    padding: "30px",
+    background: "#111",
+    color: "white",
+    marginTop: "40px"
+  }
+};
 
 export default Footer;

@@ -33,3 +33,25 @@
 .result-block-container .result-block {
   opacity: 1;
 }
+
+#app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+
+#app .flex-grow-1 {
+  flex: 1 0 auto;
+}
+
+
+footer {
+  text-align: center;
+  padding: 30px;
+  background: #111;
+  color: white;
+  margin-top: 40px;
+  flex-shrink: 0;
+}
+
