@@ -37,19 +37,37 @@ export const ExternalApiComponent = () => {
     await callApi();
   };
 
-  const callApi = async () => {
-    try {
-      const token = await getAccessTokenSilently();
-      console.log("Access Token:", token); // Per debug, rimuovere in produzione
-      const response = await fetch(`${apiOrigin}/api/external`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const responseData = await response.json();
-      setState({ ...state, showResult: true, apiMessage: responseData });
-    } catch (error) {
-      setState({ ...state, error: error.error });
+const callApi = async () => {
+  console.log("callApi fired");
+
+  try {
+    const token = await getAccessTokenSilently();
+
+    const response = await fetch(`${apiOrigin}/api/external?cacheBust=${Date.now()}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    console.log("Status:", response.status);
+
+    if (response.status === 304) {
+      console.warn("La risposta è 304 (Not Modified) e non contiene JSON.");
+      return;
     }
-  };
+
+    const responseData = await response.json();
+
+    setState({
+      ...state,
+      showResult: true,
+      apiMessage: responseData
+    });
+
+  } catch (error) {
+    console.error("Error in callApi:", error);
+    setState({ ...state, error: error.message });
+  }
+};
+
 
   const handle = (e, fn) => { e.preventDefault(); fn(); };
 
