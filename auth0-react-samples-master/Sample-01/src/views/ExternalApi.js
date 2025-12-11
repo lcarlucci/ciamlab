@@ -18,58 +18,90 @@ export const ExternalApiComponent = () => {
     useAuth0();
 
   const handleConsent = async () => {
+    console.log("handleConsent fired");
     try {
       await getAccessTokenWithPopup();
       setState({ ...state, error: null });
+      console.log("Consent granted via popup");
     } catch (error) {
-      setState({ ...state, error: error.error });
+      console.error("Error in handleConsent:", error);
+      setState({ ...state, error: error.error || error.message });
     }
     await callApi();
   };
 
   const handleLoginAgain = async () => {
+    console.log("handleLoginAgain fired");
     try {
       await loginWithPopup();
       setState({ ...state, error: null });
+      console.log("Logged in again via popup");
     } catch (error) {
-      setState({ ...state, error: error.error });
+      console.error("Error in handleLoginAgain:", error);
+      setState({ ...state, error: error.error || error.message });
     }
     await callApi();
   };
 
-const callApi = async () => {
-  console.log("callApi fired");
+  const callApi = async () => {
+    console.log("callApi fired");
 
-  try {
-    const token = await getAccessTokenSilently();
+    try {
+      // Ottieni token con audience corretto
+      const token = await getAccessTokenSilently({
+        audience: audience,
+        scope: "read:external_api",
+      });
+      console.log("Access Token:", token);
 
-    const response = await fetch(`${apiOrigin}/api/external?cacheBust=${Date.now()}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+      // Bust cache per evitare 304
+      const url = `${apiOrigin}/api/external?cacheBust=${Date.now()}`;
+      console.log("Calling API at:", url);
 
-    console.log("Status:", response.status);
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
 
-    if (response.status === 304) {
-      console.warn("La risposta è 304 (Not Modified) e non contiene JSON.");
-      return;
+      console.log("HTTP Status:", response.status);
+
+      const raw = await response.text();
+      console.log("Raw response:", raw);
+
+      // Gestione status non-ok
+      if (!response.ok) {
+        console.error("Non-OK HTTP response:", response.status, raw);
+        setState({ ...state, error: `HTTP ${response.status}: ${raw}` });
+        return;
+      }
+
+      // Se la risposta non è JSON, logga e ferma
+      if (!raw.startsWith("{") && !raw.startsWith("[")) {
+        console.error("La risposta non sembra JSON:", raw);
+        setState({ ...state, error: "La risposta API non è JSON" });
+        return;
+      }
+
+      const responseData = JSON.parse(raw);
+      console.log("Parsed JSON response:", responseData);
+
+      setState({
+        ...state,
+        showResult: true,
+        apiMessage: responseData,
+      });
+    } catch (error) {
+      console.error("Error in callApi:", error);
+      setState({ ...state, error: error.message || error.error });
     }
+  };
 
-    const responseData = await response.json();
-
-    setState({
-      ...state,
-      showResult: true,
-      apiMessage: responseData
-    });
-
-  } catch (error) {
-    console.error("Error in callApi:", error);
-    setState({ ...state, error: error.message });
-  }
-};
-
-
-  const handle = (e, fn) => { e.preventDefault(); fn(); };
+  const handle = (e, fn) => {
+    e.preventDefault();
+    fn();
+  };
 
   return (
     <div className="external-api-container">
@@ -88,6 +120,12 @@ const callApi = async () => {
           <a href="#/" onClick={(e) => handle(e, handleLoginAgain)}>
             log in again
           </a>
+        </div>
+      )}
+
+      {state.error && state.error !== "consent_required" && state.error !== "login_required" && (
+        <div className="alert alert-danger">
+          Error: {state.error}
         </div>
       )}
 
