@@ -56,6 +56,15 @@
   cursor: pointer;
 }
 
+.apibtn {
+  background-color: #32fc00;
+  color: white;
+  padding: 8px 15px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+}
+
 .logoutBtn:hover {
   background-color: #555;
 }

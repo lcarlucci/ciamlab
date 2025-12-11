@@ -44,7 +44,7 @@ const App = () => {
             }
           />
           <Route
-            path="/api/external"
+            path="/api"
             element={
               <ProtectedRoute>
                 <ExternalApi />

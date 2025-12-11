@@ -19,6 +19,12 @@ const Navbar = () => {
       <div className={styles.userInfo}>
         {isAuthenticated ? (
           <>
+          <button
+              className={styles.apibtn}
+              onClick={() => navigate("/api")}
+            >
+              Api
+            </button>
             <span
               className={styles.userName}
               onClick={() => navigate("/profile")}
