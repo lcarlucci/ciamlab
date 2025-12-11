@@ -56,7 +56,7 @@ const checkJwt = auth({
 });
 
 // API protetta
-app.get("/external-api", checkJwt, (req, res) => {
+app.get("/api/external", checkJwt, (req, res) => {
   res.send({
     msg: "Your access token was successfully validated!"
   });
