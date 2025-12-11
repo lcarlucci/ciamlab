@@ -5,6 +5,7 @@ import Loading from "../components/Loading";
 import Highlight from "../components/Highlight";
 import "./css/ExternalAPI.css";
 
+
 export const ExternalApiComponent = () => {
   const { apiOrigin = "https://ciamlab.onrender.com/", audience } = getConfig();
 
@@ -43,60 +44,57 @@ export const ExternalApiComponent = () => {
     await callApi();
   };
 
-  const callApi = async () => {
-    console.log("callApi fired");
+const callApi = async () => {
+  console.log("callApi fired");
 
-    try {
-      // Ottieni token con audience corretto
-      const token = await getAccessTokenSilently({
-        audience: audience,
-        scope: "read:external_api",
-      });
-      console.log("Access Token:", token);
+  try {
+    // Ottieni token in modo sicuro tramite Auth0 SPA SDK
+    const token = await getAccessTokenSilently({
+      audience: audience     // l'audience della tua API
+    });
+    console.log("Access Token:", token.slice(0, 20) + "..."); // log solo i primi 20 caratteri per sicurezza
 
-      // Bust cache per evitare 304
-      const url = `${apiOrigin}/api/external?cacheBust=${Date.now()}`;
-      console.log("Calling API at:", url);
+    const url = `${apiOrigin}/api/external?cacheBust=${Date.now()}`;
+    console.log("Calling API at:", url);
 
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      console.log("HTTP Status:", response.status);
-
-      const raw = await response.text();
-      console.log("Raw response:", raw);
-
-      // Gestione status non-ok
-      if (!response.ok) {
-        console.error("Non-OK HTTP response:", response.status, raw);
-        setState({ ...state, error: `HTTP ${response.status}: ${raw}` });
-        return;
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
       }
+    });
 
-      // Se la risposta non è JSON, logga e ferma
-      if (!raw.startsWith("{") && !raw.startsWith("[")) {
-        console.error("La risposta non sembra JSON:", raw);
-        setState({ ...state, error: "La risposta API non è JSON" });
-        return;
-      }
+    console.log("HTTP Status:", response.status);
 
-      const responseData = JSON.parse(raw);
-      console.log("Parsed JSON response:", responseData);
+    const raw = await response.text();
+    console.log("Raw response:", raw);
 
-      setState({
-        ...state,
-        showResult: true,
-        apiMessage: responseData,
-      });
-    } catch (error) {
-      console.error("Error in callApi:", error);
-      setState({ ...state, error: error.message || error.error });
+    if (!response.ok) {
+      console.error("Non-OK HTTP response:", response.status, raw);
+      setState({ ...state, error: `HTTP ${response.status}: ${raw}` });
+      return;
     }
-  };
+
+    if (!raw.startsWith("{") && !raw.startsWith("[")) {
+      console.error("La risposta non è JSON:", raw);
+      setState({ ...state, error: "La risposta API non è JSON" });
+      return;
+    }
+
+    const responseData = JSON.parse(raw);
+    console.log("Parsed JSON response:", responseData);
+
+    setState({
+      ...state,
+      showResult: true,
+      apiMessage: responseData
+    });
+  } catch (error) {
+    console.error("Error in callApi:", error);
+    setState({ ...state, error: error.message || error.error });
+  }
+};
+
 
   const handle = (e, fn) => {
     e.preventDefault();

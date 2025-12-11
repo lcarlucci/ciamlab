@@ -63,11 +63,11 @@ app.get("/api/external", checkJwt, (req, res) => {
 });
 
 // Serve i file statici di React
-app.use(express.static(path.join(__dirname, "build1")));
+app.use(express.static(path.join(__dirname, "build")));
 
 // Fallback per SPA: tutte le richieste non API vanno a index.html
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "build1", "index.html"));
+  res.sendFile(path.join(__dirname, "build", "index.html"));
 });
 
 app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
