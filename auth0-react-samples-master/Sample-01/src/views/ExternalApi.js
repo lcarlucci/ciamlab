@@ -50,9 +50,9 @@ const callApi = async () => {
   try {
     // Ottieni token in modo sicuro tramite Auth0 SPA SDK
     const token = await getAccessTokenSilently({
-      audience: "https://identity-auth0.cic-demo-platform.auth0app.com/api/v2/"     // l'audience della tua API
+      audience: "https://ciamlab.onrender.com/api"     // l'audience della tua API
     });
-    console.log("Access Token:", token.slice(0, 20) + "..."); // log solo i primi 20 caratteri per sicurezza
+    console.log("Access Token:", token); // log solo i primi 20 caratteri per sicurezza
 
     const url = `${apiOrigin}/api/external?cacheBust=${Date.now()}`;
     console.log("Calling API at:", url);
