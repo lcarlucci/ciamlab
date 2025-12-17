@@ -7,7 +7,6 @@ const DEBUG_BYPASS_AUTH = false;
 
 export const ProfileComponent = () => {
   const { user, getAccessTokenSilently } = useAuth0();
-  const userToken = getAccessTokenSilently();
 
   const mockUser = {
     picture: process.env.PUBLIC_URL + "/assets/placeholder.png",
@@ -28,7 +27,6 @@ export const ProfileComponent = () => {
         <div className="profile-info">
           <h2>{currentUser.name}</h2>
           <p>{currentUser.email}</p>
-          <p>{userToken}</p>
         </div>
       </div>
     </div>
