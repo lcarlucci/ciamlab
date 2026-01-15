@@ -10,12 +10,21 @@ const Navbar = () => {
   return (
     <header className={styles.header}>
       <div className={styles.logo}>
-      <img
-        src={process.env.PUBLIC_URL + "/assets/logo.svg"}
-        alt="Logo"
-        onClick={() => navigate("/home")}
-        style={{ cursor: "pointer" }} // consigliato per indicare che è cliccabile
-      />
+        <button
+          onClick={() => navigate("/home")}
+          style={{
+            background: "none",
+            border: "none",
+            padding: 0,
+            cursor: "pointer",
+          }}
+          aria-label="Go to home"
+        >
+          <img
+            src={process.env.PUBLIC_URL + "/assets/logo.svg"}
+            alt="Logo"
+          />
+        </button>
       </div>
 
       <div className={styles.userInfo}>
