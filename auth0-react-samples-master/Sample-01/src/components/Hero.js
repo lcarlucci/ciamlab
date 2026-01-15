@@ -17,7 +17,7 @@ const Hero = () => (
 
     <section className="sections">
       <div className="info-card">
-        <img src={IM} alt="Identity Management" />
+        <img src="https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExaWk3aTYxZTRjYTdoeHBhamh4OXhua3lveXN3djhyOHFsd2liczJyeiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/ki2FaRevK4g5rlW2tK/giphy.gif" alt="Identity Management" />
         <h3>Identity Management</h3>
         <p>
           Streamline your enterprise identity lifecycle. From provisioning and
