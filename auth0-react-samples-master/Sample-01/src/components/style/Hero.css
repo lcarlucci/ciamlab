@@ -55,3 +55,13 @@
 .info-card h3 {
   margin-bottom: 10px;
 }
+
+.hero,
+.hero h1,
+.hero p,
+.info-card,
+.info-card h3,
+.info-card p {
+  font-family: "Aptos";
+}
+
