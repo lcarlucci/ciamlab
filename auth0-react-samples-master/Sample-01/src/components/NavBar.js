@@ -10,15 +10,15 @@ const Navbar = () => {
   return (
     <header className={styles.header}>
       <div className={styles.logo}>
-        <button
-          onClick={() => navigate("/home")}
+       <button
+          onClick={() => navigate(isAuthenticated ? "/home" : "/")}
           style={{
             background: "none",
             border: "none",
             padding: 0,
             cursor: "pointer",
           }}
-          aria-label="Go to home"
+          aria-label="Go to home or landing page"
         >
           <img
             src={process.env.PUBLIC_URL + "/assets/logo.svg"}
