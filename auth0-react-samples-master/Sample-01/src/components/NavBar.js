@@ -11,7 +11,7 @@ const Navbar = () => {
     <header className={styles.header}>
       <div className={styles.logo}>
         <img
-          src={process.env.PUBLIC_URL + "/assets/Deloitteicon.png"}
+          src={process.env.PUBLIC_URL + "/assets/logo.svg"}
           alt="Logo"
         />
       </div>
