@@ -39,7 +39,7 @@ app.use(
           "https://identity-auth0.cic-demo-platform.auth0app.com"
         ],
         scriptSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", "data:", "https://*.googleusercontent.com", "https://*.giphy.com"],
+        imgSrc: ["'self'", "data:", "https://*.googleusercontent.com", "https://*.giphy.com", "https://trevonix.com"],
         styleSrc: ["'self'", "'unsafe-inline'"]
       },
     },

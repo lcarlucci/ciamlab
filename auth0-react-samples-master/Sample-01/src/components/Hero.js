@@ -26,7 +26,7 @@ const Hero = () => (
       </div>
 
       <div className="info-card">
-        <img src={AM} alt="Access Management" />
+        <img src="https://trevonix.com/wp-content/uploads/2022/07/identity-security-and-management.gif" alt="Access Management" />
         <h3>Access Management</h3>
         <p>
           Implement SSO, MFA, and role-based access policies to secure your
@@ -35,7 +35,7 @@ const Hero = () => (
       </div>
 
       <div className="info-card">
-        <img src={PAM} alt="Privileged Access Management" />
+        <img src="https://media3.giphy.com/media/v1.Y2lkPTc5MGI3NjExNXl4cmZtenFwcHEwemt0Z3UzZTh2cnZ0NXJ0cjB5bDdubDVoNmhicSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/077i6AULCXc0FKTj9s/giphy.gif" alt="Privileged Access Management" />
         <h3>Privileged Access Management</h3>
         <p>
           Protect your high-risk accounts with session management, credential
@@ -44,7 +44,7 @@ const Hero = () => (
       </div>
 
       <div className="info-card">
-        <img src={CIAM} alt="Customer IAM" />
+        <img src="https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExNmNtbmdocGk2a25mZDQ1cTdlZnV4MWtnNnd6NTh2ZGtxcHB0cXpjbyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/QAVfJ35dd0GT5v1mCZ/giphy.gif" alt="Customer IAM" />
         <h3>CIAM</h3>
         <p>
           Seamless customer experiences: registration, social login, consent,
