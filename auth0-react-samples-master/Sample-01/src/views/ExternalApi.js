@@ -54,9 +54,9 @@ export const ExternalApiComponent = () => {
   const callApi = async () => {
   try {
     const token = await getAccessTokenSilently({
-      audience: "https://ciamlab.onrender.com/api",
+      audience: "https://ciamlab.onrender.com/audience",
       scope: "openid profile email",
-      
+
     });
 
     const response = await fetch(`${apiOrigin}/api/external`, {

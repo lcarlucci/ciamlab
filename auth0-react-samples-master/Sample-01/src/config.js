@@ -7,7 +7,7 @@ export function getConfig() {
   // don't have an API).
   // If this resolves to `null`, the API page changes to show some helpful info about what to do
   // with the audience.
-  const audience = "https://ciamlab.onrender.com/api";
+  const audience = "https://ciamlab.onrender.com/audience";
    // configJson.audience && configJson.audience !== "{yourApiIdentifier}"
     //  ? configJson.audience
      // : null;

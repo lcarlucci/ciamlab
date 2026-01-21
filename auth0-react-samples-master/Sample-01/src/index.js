@@ -13,6 +13,7 @@ root.render(
     <Auth0Provider
       domain={config.domain}
       clientId={config.clientId}
+      audience={config.audience}
       authorizationParams={{ redirect_uri: window.location.origin }}
       cacheLocation="localstorage"      // Mantiene la sessione anche su refresh
       useRefreshTokens={true}           // Rinnova automaticamente i token
