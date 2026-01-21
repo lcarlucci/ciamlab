@@ -26,7 +26,7 @@ export const ProfileComponent = () => {
         />
         <div className="profile-info">
           <h2>{currentUser.toString()}</h2>
-          <p>Email: {currentUser.email}</p>
+          <p>Email: {currentUser.user}</p>
           <p>Email verificata: {currentUser.email_verified}</p>
           <p>Given Name: {currentUser.given_name}</p>
           <p>Family Name: {currentUser.family_name}</p>

@@ -54,7 +54,7 @@ const callApi = async () => {
     });
     console.log("Access Token:", token); // log solo i primi 20 caratteri per sicurezza
 
-    const url = `${apiOrigin}/api/external?cacheBust=${Date.now()}`;
+    const url = `${apiOrigin}api/external`;
     console.log("Calling API at:", url);
 
     const response = await fetch(url, {
