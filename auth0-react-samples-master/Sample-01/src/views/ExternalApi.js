@@ -1,13 +1,12 @@
 import React, { useState } from "react";
+import { Button, Alert } from "reactstrap";
+import Highlight from "../components/Highlight";
 import { useAuth0, withAuthenticationRequired } from "@auth0/auth0-react";
 import { getConfig } from "../config";
 import Loading from "../components/Loading";
-import Highlight from "../components/Highlight";
-import "./css/ExternalAPI.css";
-
 
 export const ExternalApiComponent = () => {
-  const { apiOrigin = "https://ciamlab.onrender.com/", audience } = getConfig();
+  const { apiOrigin = "https://ciamlab.onrender.com", audience } = getConfig();
 
   const [state, setState] = useState({
     showResult: false,
@@ -19,82 +18,63 @@ export const ExternalApiComponent = () => {
     useAuth0();
 
   const handleConsent = async () => {
-    console.log("handleConsent fired");
     try {
       await getAccessTokenWithPopup();
-      setState({ ...state, error: null });
-      console.log("Consent granted via popup");
+      setState({
+        ...state,
+        error: null,
+      });
     } catch (error) {
-      console.error("Error in handleConsent:", error);
-      setState({ ...state, error: error.error || error.message });
+      setState({
+        ...state,
+        error: error.error,
+      });
     }
+
     await callApi();
   };
 
   const handleLoginAgain = async () => {
-    console.log("handleLoginAgain fired");
     try {
       await loginWithPopup();
-      setState({ ...state, error: null });
-      console.log("Logged in again via popup");
+      setState({
+        ...state,
+        error: null,
+      });
     } catch (error) {
-      console.error("Error in handleLoginAgain:", error);
-      setState({ ...state, error: error.error || error.message });
+      setState({
+        ...state,
+        error: error.error,
+      });
     }
+
     await callApi();
   };
 
-const callApi = async () => {
-  console.log("callApi fired");
+  const callApi = async () => {
+    try {
+      const token = await getAccessTokenSilently();
 
-  try {
-    // Ottieni token in modo sicuro tramite Auth0 SPA SDK
-    const token = await getAccessTokenSilently({
-      audience: "https://identity-auth0.cic-demo-platform.auth0app.com/api/v2/"    
-    });
-    console.log("Access Token:", token); 
+      const response = await fetch(`${apiOrigin}/api/external`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-    const url = `${apiOrigin}api/external`;
-    console.log("Calling API at:", url);
+      const responseData = await response.json();
 
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json"
-      }
-    });
-
-    console.log("HTTP Status:", response.status);
-
-    const raw = await response.text();
-    console.log("Raw response:", raw);
-
-    if (!response.ok) {
-      console.error("Non-OK HTTP response:", response.status, raw);
-      setState({ ...state, error: `HTTP ${response.status}: ${raw}` });
-      return;
+      setState({
+        ...state,
+        showResult: true,
+        apiMessage: responseData,
+      });
+    } catch (error) {
+      setState({
+        ...state,
+        error: error.error,
+      });
     }
-
-    if (!raw.startsWith("{") && !raw.startsWith("[")) {
-      console.error("La risposta non è JSON:", raw);
-      setState({ ...state, error: "La risposta API non è JSON" });
-      return;
-    }
-
-    const responseData = JSON.parse(raw);
-    console.log("Parsed JSON response:", responseData);
-
-    setState({
-      ...state,
-      showResult: true,
-      apiMessage: responseData
-    });
-  } catch (error) {
-    console.error("Error in callApi:", error);
-    setState({ ...state, error: error.message || error.error });
-  }
-};
-
+  };
 
   const handle = (e, fn) => {
     e.preventDefault();
@@ -102,47 +82,113 @@ const callApi = async () => {
   };
 
   return (
-    <div className="external-api-container">
-      {state.error === "consent_required" && (
-        <div className="alert alert-warning">
-          You need to{" "}
-          <a href="#/" onClick={(e) => handle(e, handleConsent)}>
-            consent to get access to users api
-          </a>
-        </div>
-      )}
+    <>
+      <div className="mb-5">
+        {state.error === "consent_required" && (
+          <Alert color="warning">
+            You need to{" "}
+            <a
+              href="#/"
+              class="alert-link"
+              onClick={(e) => handle(e, handleConsent)}
+            >
+              consent to get access to users api
+            </a>
+          </Alert>
+        )}
 
-      {state.error === "login_required" && (
-        <div className="alert alert-warning">
-          You need to{" "}
-          <a href="#/" onClick={(e) => handle(e, handleLoginAgain)}>
-            log in again
-          </a>
-        </div>
-      )}
+        {state.error === "login_required" && (
+          <Alert color="warning">
+            You need to{" "}
+            <a
+              href="#/"
+              class="alert-link"
+              onClick={(e) => handle(e, handleLoginAgain)}
+            >
+              log in again
+            </a>
+          </Alert>
+        )}
 
-      {state.error && state.error !== "consent_required" && state.error !== "login_required" && (
-        <div className="alert alert-danger">
-          Error: {state.error}
-        </div>
-      )}
+        <h1>External API</h1>
+        <p className="lead">
+          Ping an external API by clicking the button below.
+        </p>
 
-      <h1>External API</h1>
-      <p>Ping an external API by clicking the button below.</p>
+        <p>
+          This will call a local API on port 3001 that would have been started
+          if you run <code>npm run dev</code>. An access token is sent as part
+          of the request's `Authorization` header and the API will validate it
+          using the API's audience value.
+        </p>
 
-      <button className="btn" onClick={callApi} disabled={!audience}>
-        Ping API
-      </button>
+        {!audience && (
+          <Alert color="warning">
+            <p>
+              You can't call the API at the moment because your application does
+              not have any configuration for <code>audience</code>, or it is
+              using the default value of{" "}
+              <code>&#123;yourApiIdentifier&#125;</code>. You might get this
+              default value if you used the "Download Sample" feature of{" "}
+              <a href="https://auth0.com/docs/quickstart/spa/react">
+                the quickstart guide
+              </a>
+              , but have not set an API up in your Auth0 Tenant. You can find
+              out more information on{" "}
+              <a href="https://auth0.com/docs/api">setting up APIs</a> in the
+              Auth0 Docs.
+            </p>
+            <p>
+              The audience is the identifier of the API that you want to call
+              (see{" "}
+              <a href="https://auth0.com/docs/get-started/dashboard/tenant-settings#api-authorization-settings">
+                API Authorization Settings
+              </a>{" "}
+              for more info).
+            </p>
 
-      {state.showResult && (
-        <div className="result-block">
-          <h6>Result</h6>
-          <Highlight>
-            <span>{JSON.stringify(state.apiMessage, null, 2)}</span>
-          </Highlight>
-        </div>
-      )}
-    </div>
+            <p>
+              In this sample, you can configure the audience in a couple of
+              ways:
+            </p>
+            <ul>
+              <li>
+                in the <code>src/index.js</code> file
+              </li>
+              <li>
+                by specifying it in the <code>auth_config.json</code> file (see
+                the <code>auth_config.json.example</code> file for an example of
+                where it should go)
+              </li>
+            </ul>
+            <p>
+              Once you have configured the value for <code>audience</code>,
+              please restart the app and try to use the "Ping API" button below.
+            </p>
+          </Alert>
+        )}
+
+        <Button
+          color="primary"
+          className="mt-5"
+          onClick={callApi}
+          disabled={!audience}
+        >
+          Ping API
+        </Button>
+      </div>
+
+      <div className="result-block-container">
+        {state.showResult && (
+          <div className="result-block" data-testid="api-result">
+            <h6 className="muted">Result</h6>
+            <Highlight>
+              <span>{JSON.stringify(state.apiMessage, null, 2)}</span>
+            </Highlight>
+          </div>
+        )}
+      </div>
+    </>
   );
 };
 
