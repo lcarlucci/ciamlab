@@ -52,29 +52,33 @@ export const ExternalApiComponent = () => {
   };
 
   const callApi = async () => {
-    try {
-      const token = await getAccessTokenSilently();
+  try {
+    const token = await getAccessTokenSilently({
+      audience: "https://ciamlab.onrender.com/api",
+      scope: "openid profile email"
+    });
 
-      const response = await fetch(`${apiOrigin}/api/external`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+    const response = await fetch(`${apiOrigin}/api/external`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
-      const responseData = await response.json();
+    const responseData = await response.json();
 
-      setState({
-        ...state,
-        showResult: true,
-        apiMessage: responseData,
-      });
-    } catch (error) {
-      setState({
-        ...state,
-        error: error.error,
-      });
-    }
-  };
+    setState({
+      ...state,
+      showResult: true,
+      apiMessage: responseData,
+    });
+  } catch (error) {
+    setState({
+      ...state,
+      error: error.error || error.message,
+    });
+  }
+};
+
 
   const handle = (e, fn) => {
     e.preventDefault();
