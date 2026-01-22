@@ -21,8 +21,8 @@ const Navbar = () => {
           aria-label="Go to home or landing page"
         >
           <img
-            src={process.env.PUBLIC_URL + "/assets/logo.svg"}
-            alt="Logo"
+            src=""//inserire logo qui //es: process.env.PUBLIC_URL + "/assets/logo.png"
+            alt=""//inserire alt qui
           />
         </button>
       </div>
