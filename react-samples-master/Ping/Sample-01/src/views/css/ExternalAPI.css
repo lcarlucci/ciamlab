@@ -1,0 +1,39 @@
+.external-api-container {
+  padding: 20px;
+}
+
+.btn {
+  padding: 10px 20px;
+  background: #86BC25;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.alert {
+  padding: 10px 15px;
+  background: #f5c518;
+  border-radius: 6px;
+  margin-bottom: 10px;
+}
+
+.alert a {
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.result-block {
+  margin-top: 20px;
+  background: #f5f5f5;
+  padding: 15px;
+  border-radius: 6px;
+  font-family: monospace;
+  white-space: pre-wrap;
+}
