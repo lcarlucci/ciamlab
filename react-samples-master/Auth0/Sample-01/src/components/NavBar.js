@@ -32,6 +32,12 @@ const Navbar = () => {
           <>
           <button
               className={styles.apibtn}
+              onClick={() => navigate("/home")}
+            >
+              Home
+            </button>
+          <button
+              className={styles.apibtn}
               onClick={() => navigate("/api")}
             >
               Api

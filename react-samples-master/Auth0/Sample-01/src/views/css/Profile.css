@@ -24,6 +24,44 @@
   color: #555;
 }
 
-.profile-container{
+.profile-container {
   font-family: "Aptos";
+}
+
+.profile-actions {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reset-password-button {
+  width: fit-content;
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: 1px solid #1b4d8a;
+  background: #1b4d8a;
+  color: #fff;
+  cursor: pointer;
+}
+
+.reset-password-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.reset-password-status {
+  font-size: 14px;
+}
+
+.reset-password-status.success {
+  color: #1f7a1f;
+}
+
+.reset-password-status.error {
+  color: #a32020;
+}
+
+.reset-password-status.info {
+  color: #555;
 }
