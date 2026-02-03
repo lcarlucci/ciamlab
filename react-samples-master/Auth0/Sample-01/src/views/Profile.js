@@ -15,6 +15,19 @@ export const ProfileComponent = () => {
   const [fieldStatus, setFieldStatus] = useState({});
   const [orders, setOrders] = useState([]);
   const config = getConfig();
+  const fallbackAvatar =
+    "data:image/svg+xml;utf8," +
+    encodeURIComponent(
+      "<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'>" +
+        "<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>" +
+        "<stop offset='0%' stop-color='#9fe044'/>" +
+        "<stop offset='100%' stop-color='#6a961d'/>" +
+        "</linearGradient></defs>" +
+        "<rect width='180' height='180' rx='38' fill='url(#g)'/>" +
+        "<circle cx='90' cy='70' r='30' fill='white' opacity='0.95'/>" +
+        "<path d='M42 148c10-28 34-44 48-44s38 16 48 44' fill='white' opacity='0.95'/>" +
+      "</svg>"
+    );
 
   const mockUser = {
     picture: process.env.PUBLIC_URL + "/assets/placeholder.png",
@@ -221,7 +234,7 @@ export const ProfileComponent = () => {
       <section className="profile-shell">
         <aside className="profile-card">
           <img
-            src={currentUser?.picture || "/assets/placeholder.png"}
+            src={currentUser?.picture || fallbackAvatar}
             alt="Profile"
             className="profile-picture"
           />

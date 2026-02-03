@@ -31,7 +31,7 @@ const Checkout = () => {
 
   const pricePerItem = 12000;
   const subtotal = effectiveCart.length * pricePerItem;
-  const formatter = new Intl.NumberFormat("en-US", {
+  const formatter = new Intl.NumberFormat("it-IT", {
     style: "currency",
     currency: "EUR",
     maximumFractionDigits: 0,
