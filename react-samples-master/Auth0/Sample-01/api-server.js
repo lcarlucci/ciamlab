@@ -27,6 +27,7 @@ if (!authConfig.domain || !authConfig.audience || authConfig.audience === "{API_
 }
 
 app.use(morgan("dev"));
+app.use(express.json());
 //app.use(helmet()); <-- Originale
 //modifica
 app.use(
@@ -54,6 +55,79 @@ const checkJwt = auth({
   audience: authConfig.audience,
   issuerBaseURL: `https://${authConfig.domain}/`,
   algorithms: ["RS256"],
+});
+
+async function getManagementApiToken() {
+  const clientId = process.env.AUTH0_MGMT_CLIENT_ID;
+  const clientSecret = process.env.AUTH0_MGMT_CLIENT_SECRET;
+  const audience = process.env.AUTH0_MGMT_AUDIENCE || `https://${authConfig.domain}/api/v2/`;
+
+  if (!clientId || !clientSecret) {
+    throw new Error("Missing AUTH0_MGMT_CLIENT_ID or AUTH0_MGMT_CLIENT_SECRET.");
+  }
+
+  const response = await fetch(`https://${authConfig.domain}/oauth/token`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      grant_type: "client_credentials",
+      client_id: clientId,
+      client_secret: clientSecret,
+      audience,
+    }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data?.error_description || "Failed to obtain Management API token.");
+  }
+
+  return data.access_token;
+}
+
+app.patch("/api/user/phone", checkJwt, async (req, res) => {
+  const phoneNumber = (req.body?.phoneNumber || "").trim();
+  const userId = req.auth?.payload?.sub;
+
+  if (!userId) {
+    return res.status(400).json({ message: "User id non disponibile." });
+  }
+
+  if (!phoneNumber) {
+    return res.status(400).json({ message: "phoneNumber � obbligatorio." });
+  }
+
+  try {
+    const mgmtToken = await getManagementApiToken();
+    const response = await fetch(`https://${authConfig.domain}/api/v2/users/${encodeURIComponent(userId)}`, {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${mgmtToken}`,
+      },
+      body: JSON.stringify({
+        user_metadata: {
+          phone_number: phoneNumber,
+        },
+      }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        message: data?.message || "Errore durante l'aggiornamento del numero di telefono.",
+      });
+    }
+
+    return res.json({
+      message: "Numero di telefono aggiornato.",
+      phoneNumber: data?.user_metadata?.phone_number || phoneNumber,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error?.message || "Errore server." });
+  }
 });
 
 // API protetta

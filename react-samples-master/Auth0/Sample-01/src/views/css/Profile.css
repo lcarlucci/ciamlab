@@ -65,3 +65,49 @@
 .reset-password-status.info {
   color: #555;
 }
+
+.phone-actions {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.phone-label {
+  font-weight: 600;
+  color: #333;
+}
+
+.phone-input {
+  max-width: 260px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #c0c0c0;
+}
+
+.phone-save-button {
+  width: fit-content;
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: 1px solid #2f6d3a;
+  background: #2f6d3a;
+  color: #fff;
+  cursor: pointer;
+}
+
+.phone-save-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.phone-status {
+  font-size: 14px;
+}
+
+.phone-status.success {
+  color: #1f7a1f;
+}
+
+.phone-status.error {
+  color: #a32020;
+}

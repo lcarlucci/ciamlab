@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useAuth0, withAuthenticationRequired } from "@auth0/auth0-react";
 import Loading from "../components/Loading";
 import { getConfig } from "../config";
@@ -8,8 +8,11 @@ const DEBUG_BYPASS_AUTH = false;
 const PASSWORD_RESET_CONNECTION = "Username-Password-Authentication";
 
 export const ProfileComponent = () => {
-  const { user } = useAuth0();
+  const { user, getAccessTokenSilently } = useAuth0();
   const [resetState, setResetState] = useState({ status: "idle", message: "" });
+  const [phoneState, setPhoneState] = useState({ status: "idle", message: "" });
+  const [phoneInput, setPhoneInput] = useState("");
+  const [savedPhone, setSavedPhone] = useState("");
   const config = getConfig();
 
   const mockUser = {
@@ -17,12 +20,19 @@ export const ProfileComponent = () => {
     name: "Test User",
     email: "test@domain.com",
     sub: "auth0|test-user",
+    user_metadata: { phone_number: "+390000000000" },
   };
 
   const currentUser = DEBUG_BYPASS_AUTH ? mockUser : user;
   const email = currentUser?.email;
   const provider = currentUser?.sub?.split("|")[0];
   const isDbUser = provider === "auth0";
+
+  useEffect(() => {
+    const currentPhone = currentUser?.user_metadata?.phone_number || "";
+    setPhoneInput(currentPhone);
+    setSavedPhone(currentPhone);
+  }, [currentUser]);
 
   const providerMessage = !isDbUser
     ? provider === "google-oauth2"
@@ -72,6 +82,48 @@ export const ProfileComponent = () => {
     }
   };
 
+  const handlePhoneSave = async () => {
+    if (!phoneInput.trim()) {
+      setPhoneState({ status: "error", message: "Inserisci un numero di telefono valido." });
+      return;
+    }
+
+    setPhoneState({ status: "loading", message: "" });
+
+    try {
+      const token = await getAccessTokenSilently({
+        authorizationParams: { audience: config.audience },
+      });
+
+      const apiBase = config.apiOrigin || window.location.origin;
+      const response = await fetch(`${apiBase}/api/user/phone`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ phoneNumber: phoneInput.trim() }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data?.message || "Errore durante il salvataggio del telefono.");
+      }
+
+      setSavedPhone(data.phoneNumber || phoneInput.trim());
+      setPhoneState({
+        status: "success",
+        message: "Numero di telefono aggiornato.",
+      });
+    } catch (err) {
+      setPhoneState({
+        status: "error",
+        message: err?.message || "Errore durante il salvataggio del telefono.",
+      });
+    }
+  };
+
   return (
     <div className="profile-container">
       <div className="profile-header">
@@ -90,6 +142,7 @@ export const ProfileComponent = () => {
           <p>Info Zone: {currentUser?.zoneinfo}</p>
           <p>Telefono: {currentUser?.phone_number}</p>
           <p>Telefono Verificato: {currentUser?.phone_number_verified}</p>
+          <p>Telefono (profilo): {savedPhone || "�"}</p>
 
           <div className="profile-actions">
             <button
@@ -108,6 +161,33 @@ export const ProfileComponent = () => {
             {resetState.message ? (
               <div className={`reset-password-status ${resetState.status}`}>
                 {resetState.message}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="phone-actions">
+            <label className="phone-label" htmlFor="phoneNumber">
+              Cambia numero di telefono
+            </label>
+            <input
+              id="phoneNumber"
+              className="phone-input"
+              type="tel"
+              value={phoneInput}
+              onChange={(event) => setPhoneInput(event.target.value)}
+              placeholder="+39 333 123 4567"
+            />
+            <button
+              className="phone-save-button"
+              onClick={handlePhoneSave}
+              disabled={phoneState.status === "loading"}
+              type="button"
+            >
+              {phoneState.status === "loading" ? "Salvataggio..." : "Salva numero"}
+            </button>
+            {phoneState.message ? (
+              <div className={`phone-status ${phoneState.status}`}>
+                {phoneState.message}
               </div>
             ) : null}
           </div>
