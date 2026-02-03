@@ -20,12 +20,12 @@ export const ProfileComponent = () => {
     encodeURIComponent(
       "<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'>" +
         "<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>" +
-        "<stop offset='0%' stop-color='#9fe044'/>" +
-        "<stop offset='100%' stop-color='#6a961d'/>" +
+        "<stop offset='0%' stop-color='#dff5a1'/>" +
+        "<stop offset='100%' stop-color='#86bc25'/>" +
         "</linearGradient></defs>" +
-        "<rect width='180' height='180' rx='38' fill='url(#g)'/>" +
-        "<circle cx='90' cy='70' r='30' fill='white' opacity='0.95'/>" +
-        "<path d='M42 148c10-28 34-44 48-44s38 16 48 44' fill='white' opacity='0.95'/>" +
+        "<rect width='180' height='180' rx='40' fill='url(#g)'/>" +
+        "<circle cx='90' cy='66' r='32' fill='white'/>" +
+        "<path d='M38 152c12-30 36-46 52-46s40 16 52 46' fill='white'/>" +
       "</svg>"
     );
 

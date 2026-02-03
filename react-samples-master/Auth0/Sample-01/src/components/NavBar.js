@@ -11,12 +11,12 @@ const Navbar = () => {
     encodeURIComponent(
       "<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'>" +
         "<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>" +
-        "<stop offset='0%' stop-color='#9fe044'/>" +
-        "<stop offset='100%' stop-color='#6a961d'/>" +
+        "<stop offset='0%' stop-color='#dff5a1'/>" +
+        "<stop offset='100%' stop-color='#86bc25'/>" +
         "</linearGradient></defs>" +
-        "<rect width='120' height='120' rx='28' fill='url(#g)'/>" +
-        "<circle cx='60' cy='48' r='20' fill='white' opacity='0.95'/>" +
-        "<path d='M28 98c6-18 22-28 32-28s26 10 32 28' fill='white' opacity='0.95'/>" +
+        "<rect width='120' height='120' rx='30' fill='url(#g)'/>" +
+        "<circle cx='60' cy='46' r='22' fill='white'/>" +
+        "<path d='M24 102c8-22 26-34 36-34s28 12 36 34' fill='white'/>" +
       "</svg>"
     );
 
