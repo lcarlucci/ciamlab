@@ -69,6 +69,51 @@ export const ProfileComponent = () => {
     setFieldValues(nextValues);
   }, [currentUser, editableFields]);
 
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const loadMetadata = async () => {
+      try {
+        const token = await getAccessTokenSilently({
+          authorizationParams: { audience: config.audience },
+        });
+
+        const apiBase = config.apiOrigin || window.location.origin;
+        const response = await fetch(`${apiBase}/api/user/profile`, {
+          headers: {
+            authorization: `Bearer ${token}`,
+          },
+        });
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data?.message || "Error while fetching profile metadata.");
+        }
+
+        const metadata = data?.user_metadata || {};
+        setFieldValues((prev) => {
+          const next = { ...prev };
+          editableFields.forEach((field) => {
+            if (metadata[field.key] !== undefined && metadata[field.key] !== null) {
+              next[field.key] = metadata[field.key];
+            }
+          });
+          return next;
+        });
+      } catch (err) {
+        setFieldStatus((prev) => ({
+          ...prev,
+          metadata: {
+            status: "error",
+            message: err?.message || "Unable to load profile metadata.",
+          },
+        }));
+      }
+    };
+
+    loadMetadata();
+  }, [currentUser, editableFields, getAccessTokenSilently, config.audience, config.apiOrigin]);
+
   const providerMessage = !isDbUser
     ? provider === "google-oauth2"
       ? "To change your password, go to your Google account settings."
