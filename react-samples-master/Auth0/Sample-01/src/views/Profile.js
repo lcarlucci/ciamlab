@@ -163,17 +163,15 @@ export const ProfileComponent = () => {
 
   return (
     <div className="profile-container">
-      <div className="profile-header">
-        <img
-          src={currentUser?.picture || "/assets/placeholder.png"}
-          alt="Profile"
-          className="profile-picture"
-        />
-        <div className="profile-info">
-          <h2>{currentUser?.name || currentUser?.email || "Utente"}</h2>
-          <p>Email: {currentUser?.email}</p>
-          <p>Email verificata: {String(currentUser?.email_verified)}</p>
-
+      <section className="profile-shell">
+        <aside className="profile-card">
+          <img
+            src={currentUser?.picture || "/assets/placeholder.png"}
+            alt="Profile"
+            className="profile-picture"
+          />
+          <h2 className="profile-name">{currentUser?.name || "Utente"}</h2>
+          <p className="profile-email">{currentUser?.email || "Email non disponibile"}</p>
           <div className="profile-actions">
             <button
               className="reset-password-button"
@@ -194,33 +192,56 @@ export const ProfileComponent = () => {
               </div>
             ) : null}
           </div>
+        </aside>
 
-          <div className="profile-fields">
+        <div className="profile-details">
+          <div className="details-header">
+            <h3>User profile</h3>
+            <span className="details-subtitle">Dettagli anagrafici e contatti</span>
+          </div>
+
+          <div className="profile-fields compact">
             {editableFields.map((field) => {
               const status = fieldStatus[field.key];
               const isEditing = editingField === field.key;
               const value = fieldValues[field.key] || "";
 
               return (
-                <div key={field.key} className="profile-field">
-                  {!isEditing ? (
-                    <div className="field-view">
-                      <div className="field-text">
-                        <span className="field-label">{field.label}</span>
-                        {field.note ? (
-                          <span className="field-note">{field.note}</span>
-                        ) : null}
-                        <span className="field-value">{value || "N/A"}</span>
-                      </div>
-                      <button
-                        className="field-edit-button"
-                        onClick={() => setEditingField(field.key)}
-                        type="button"
-                      >
-                        Modifica
-                      </button>
+                <div key={field.key} className="profile-field compact">
+                  <div className="field-row">
+                    <div className="field-info">
+                      <span className="field-label">{field.label}</span>
+                      {field.note ? (
+                        <span className="field-note">{field.note}</span>
+                      ) : null}
+                      <span className="field-value">{value || "N/A"}</span>
                     </div>
-                  ) : (
+                    <button
+                      className="field-edit-button icon-only"
+                      onClick={() =>
+                        setEditingField(isEditing ? null : field.key)
+                      }
+                      aria-label="Modifica"
+                      type="button"
+                    >
+                      <svg
+                        className="edit-icon"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M4 16.5V20h3.5L19 8.5l-3.5-3.5L4 16.5z"
+                          fill="currentColor"
+                        />
+                        <path
+                          d="M20.7 7.3c.4-.4.4-1 0-1.4l-2.6-2.6c-.4-.4-1-.4-1.4 0l-1.7 1.7 3.5 3.5 2.2-2.2z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+
+                  {isEditing ? (
                     <div className="field-edit">
                       <input
                         className="field-input"
@@ -252,7 +273,7 @@ export const ProfileComponent = () => {
                         </button>
                       </div>
                     </div>
-                  )}
+                  ) : null}
 
                   {status?.message ? (
                     <div className={`field-status ${status.status}`}>
@@ -264,7 +285,44 @@ export const ProfileComponent = () => {
             })}
           </div>
         </div>
-      </div>
+      </section>
+
+      <section className="orders-shell">
+        <div className="orders-header">
+          <h3>Ordini</h3>
+          <div className="orders-tabs">
+            <button className="orders-tab active" type="button">Recenti</button>
+            <button className="orders-tab" type="button">In lavorazione</button>
+            <button className="orders-tab" type="button">Archiviati</button>
+          </div>
+        </div>
+
+        <div className="orders-table">
+          <div className="orders-row orders-head">
+            <span>Tipo ordine</span>
+            <span>Data</span>
+            <span>Stato</span>
+            <span>Note</span>
+          </div>
+          <div className="orders-row">
+            <span>IAM Services</span>
+            <span>--/--/----</span>
+            <span className="status-badge">Da definire</span>
+            <span>In arrivo</span>
+          </div>
+          <div className="orders-empty-card">
+            <div className="orders-empty-title">Nessun ordine disponibile</div>
+            <p>
+              Quando il cliente effettuerà un checkout, qui compariranno lo
+              storico ordini, lo stato e i riferimenti di fatturazione.
+            </p>
+            <div className="orders-empty-meta">
+              <span>Prossimo step:</span>
+              <span>Collegare il sistema di ordini</span>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   );
 };
