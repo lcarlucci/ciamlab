@@ -123,6 +123,17 @@
   border: 1px solid rgba(15, 29, 18, 0.2);
 }
 
+.phone-toggle-button {
+  width: fit-content;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(134, 188, 37, 0.4);
+  background: var(--surface);
+  color: var(--brand-dark);
+  cursor: pointer;
+  font-weight: 600;
+}
+
 .phone-save-button {
   width: fit-content;
   padding: 10px 18px;

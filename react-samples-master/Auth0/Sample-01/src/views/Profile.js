@@ -13,6 +13,7 @@ export const ProfileComponent = () => {
   const [phoneState, setPhoneState] = useState({ status: "idle", message: "" });
   const [phoneInput, setPhoneInput] = useState("");
   const [savedPhone, setSavedPhone] = useState("");
+  const [showPhoneForm, setShowPhoneForm] = useState(false);
   const config = getConfig();
 
   const mockUser = {
@@ -166,25 +167,34 @@ export const ProfileComponent = () => {
           </div>
 
           <div className="phone-actions">
-            <label className="phone-label" htmlFor="phoneNumber">
-              Cambia numero di telefono
-            </label>
-            <input
-              id="phoneNumber"
-              className="phone-input"
-              type="tel"
-              value={phoneInput}
-              onChange={(event) => setPhoneInput(event.target.value)}
-              placeholder="+39 333 123 4567"
-            />
+            <label className="phone-label">Numero di telefono</label>
             <button
-              className="phone-save-button"
-              onClick={handlePhoneSave}
-              disabled={phoneState.status === "loading"}
+              className="phone-toggle-button"
+              onClick={() => setShowPhoneForm((prev) => !prev)}
               type="button"
             >
-              {phoneState.status === "loading" ? "Salvataggio..." : "Salva numero"}
+              {showPhoneForm ? "Annulla" : "Modifica numero"}
             </button>
+            {showPhoneForm ? (
+              <>
+                <input
+                  id="phoneNumber"
+                  className="phone-input"
+                  type="tel"
+                  value={phoneInput}
+                  onChange={(event) => setPhoneInput(event.target.value)}
+                  placeholder="+39 333 123 4567"
+                />
+                <button
+                  className="phone-save-button"
+                  onClick={handlePhoneSave}
+                  disabled={phoneState.status === "loading"}
+                  type="button"
+                >
+                  {phoneState.status === "loading" ? "Salvataggio..." : "Salva numero"}
+                </button>
+              </>
+            ) : null}
             {phoneState.message ? (
               <div className={`phone-status ${phoneState.status}`}>
                 {phoneState.message}
