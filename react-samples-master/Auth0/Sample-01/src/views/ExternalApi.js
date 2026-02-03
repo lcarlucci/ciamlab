@@ -7,6 +7,7 @@ import Loading from "../components/Loading";
 
 export const ExternalApiComponent = () => {
   const { apiOrigin = "https://ciamlab.onrender.com", audience } = getConfig();
+  const apiBase = apiOrigin.replace(/\/+$/, "");
 
   const [state, setState] = useState({
     showResult: false,
@@ -59,7 +60,7 @@ export const ExternalApiComponent = () => {
 
     });
 
-    const response = await fetch(`${apiOrigin}/api/external`, {
+    const response = await fetch(`${apiBase}/api/external`, {
       headers: {
         Authorization: `Bearer ${token}`,
       }
