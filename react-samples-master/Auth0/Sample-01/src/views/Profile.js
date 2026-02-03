@@ -13,6 +13,7 @@ export const ProfileComponent = () => {
   const [editingField, setEditingField] = useState(null);
   const [fieldValues, setFieldValues] = useState({});
   const [fieldStatus, setFieldStatus] = useState({});
+  const [orders, setOrders] = useState([]);
   const config = getConfig();
 
   const mockUser = {
@@ -91,6 +92,7 @@ export const ProfileComponent = () => {
         }
 
         const metadata = data?.user_metadata || {};
+        setOrders(metadata.orders || []);
         setFieldValues((prev) => {
           const next = { ...prev };
           editableFields.forEach((field) => {
@@ -355,29 +357,147 @@ export const ProfileComponent = () => {
         </div>
 
         <div className="orders-table">
-          <div className="orders-row orders-head">
-            <span>Order type</span>
-            <span>Date</span>
-            <span>Status</span>
-            <span>Notes</span>
-          </div>
-          <div className="orders-row">
-            <span>IAM Services</span>
-            <span>--/--/----</span>
-            <span className="status-badge">Pending</span>
-            <span>Coming soon</span>
-          </div>
-          <div className="orders-empty-card">
-            <div className="orders-empty-title">No orders yet</div>
-            <p>
-              When the customer completes a checkout, this section will show
-              order history, status, and billing references.
-            </p>
-            <div className="orders-empty-meta">
-              <span>Next step:</span>
-              <span>Connect the order system</span>
+          {orders.length > 0 ? (
+            <div className="orders-list">
+              {orders.map((order) => (
+                <div key={order.id} className="order-card">
+                  <div className="order-header">
+                    <div>
+                      <div className="order-id">Order {order.id}</div>
+                      <div className="order-date">
+                        {new Date(order.createdAt).toLocaleString()}
+                      </div>
+                    </div>
+                    <span className="status-badge">{order.status || "Paid"}</span>
+                  </div>
+
+                  <div className="order-section">
+                    <h4>Items</h4>
+                    <ul className="order-items">
+                      {(order.items || []).map((item, idx) => (
+                        <li key={`${order.id}-${idx}`}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="order-section">
+                    <h4>Billing</h4>
+                    <div className="order-grid">
+                      <div>
+                        <span className="order-label">Full name</span>
+                        <span className="order-value">{order.billing?.fullName}</span>
+                      </div>
+                      <div>
+                        <span className="order-label">Email</span>
+                        <span className="order-value">{order.billing?.email}</span>
+                      </div>
+                      <div>
+                        <span className="order-label">Company</span>
+                        <span className="order-value">{order.billing?.company}</span>
+                      </div>
+                      <div>
+                        <span className="order-label">Phone</span>
+                        <span className="order-value">{order.billing?.phone}</span>
+                      </div>
+                      <div>
+                        <span className="order-label">Address</span>
+                        <span className="order-value">{order.billing?.address}</span>
+                      </div>
+                      <div>
+                        <span className="order-label">City</span>
+                        <span className="order-value">{order.billing?.city}</span>
+                      </div>
+                      <div>
+                        <span className="order-label">Country</span>
+                        <span className="order-value">{order.billing?.country}</span>
+                      </div>
+                      <div>
+                        <span className="order-label">VAT / Tax ID</span>
+                        <span className="order-value">{order.billing?.vat}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="order-section">
+                    <h4>Payment</h4>
+                    <div className="order-grid">
+                      <div>
+                        <span className="order-label">Method</span>
+                        <span className="order-value">{order.payment?.method}</span>
+                      </div>
+                      {order.payment?.card ? (
+                        <>
+                          <div>
+                            <span className="order-label">Card number</span>
+                            <span className="order-value">{order.payment.card.number}</span>
+                          </div>
+                          <div>
+                            <span className="order-label">Expiry</span>
+                            <span className="order-value">{order.payment.card.expiry}</span>
+                          </div>
+                          <div>
+                            <span className="order-label">CVV</span>
+                            <span className="order-value">{order.payment.card.cvv}</span>
+                          </div>
+                          <div>
+                            <span className="order-label">Cardholder</span>
+                            <span className="order-value">{order.payment.card.holder}</span>
+                          </div>
+                        </>
+                      ) : null}
+                      {order.payment?.invoice ? (
+                        <>
+                          <div>
+                            <span className="order-label">PEC</span>
+                            <span className="order-value">{order.payment.invoice.pecEmail}</span>
+                          </div>
+                          <div>
+                            <span className="order-label">SDI</span>
+                            <span className="order-value">{order.payment.invoice.sdiCode}</span>
+                          </div>
+                          <div>
+                            <span className="order-label">VAT</span>
+                            <span className="order-value">{order.payment.invoice.vatNumber}</span>
+                          </div>
+                          <div>
+                            <span className="order-label">Billing contact</span>
+                            <span className="order-value">{order.payment.invoice.billingContact}</span>
+                          </div>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="order-section totals">
+                    <div className="order-total">
+                      <span>Subtotal</span>
+                      <span>
+                        {order.totals?.currency || "USD"} {order.totals?.subtotal}
+                      </span>
+                    </div>
+                    <div className="order-total muted">
+                      <span>Price per item</span>
+                      <span>
+                        {order.totals?.currency || "USD"} {order.totals?.pricePerItem}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
+          ) : (
+            <div className="orders-empty-card">
+              <div className="orders-empty-title">No orders yet</div>
+              <p>
+                When the customer completes a checkout, this section will show
+                order history, status, and billing references.
+              </p>
+              <div className="orders-empty-meta">
+                <span>Next step:</span>
+                <span>Connect the order system</span>
+              </div>
+            </div>
+          )}
         </div>
       </section>
     </div>

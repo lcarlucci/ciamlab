@@ -113,6 +113,11 @@
   background: white;
 }
 
+.field-error {
+  color: #a32020;
+  font-size: 0.8rem;
+}
+
 .payment-methods {
   display: grid;
   gap: 12px;
@@ -289,6 +294,19 @@
   cursor: pointer;
   box-shadow: 0 10px 18px var(--glow);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.submit-status {
+  margin-top: 10px;
+  font-size: 0.9rem;
+}
+
+.submit-status.success {
+  color: var(--brand-dark);
+}
+
+.submit-status.error {
+  color: #a32020;
 }
 
 .checkout-primary:hover {
