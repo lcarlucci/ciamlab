@@ -4,6 +4,7 @@ import Highlight from "../components/Highlight";
 import { useAuth0, withAuthenticationRequired } from "@auth0/auth0-react";
 import { getConfig } from "../config";
 import Loading from "../components/Loading";
+import "./css/ExternalAPI.css";
 
 export const ExternalApiComponent = () => {
   const { apiOrigin = "https://ciamlab.onrender.com", audience } = getConfig();
@@ -55,7 +56,7 @@ export const ExternalApiComponent = () => {
   const callApi = async () => {
   try {
     const token = await getAccessTokenSilently({
-      audience: "https://ciamlab.onrender.com/audience",
+      audience: "https://ciamlab.onrender.com/api",
       scope: "openid profile email",
 
     });
@@ -88,14 +89,33 @@ export const ExternalApiComponent = () => {
   };
 
   return (
-    <>
-      <div className="mb-5">
+    <div className="external-api-container">
+      <div className="api-hero">
+        <div className="api-hero-text">
+          <span className="api-eyebrow">API Workspace</span>
+          <h1>External API</h1>
+          <p className="lead">
+            Ping an external API by clicking the button below.
+          </p>
+        </div>
+        <div className="api-hero-actions">
+          <Button
+            className="api-primary-btn"
+            onClick={callApi}
+            disabled={!audience}
+          >
+            Ping API
+          </Button>
+        </div>
+      </div>
+
+      <div className="api-card">
         {state.error === "consent_required" && (
-          <Alert color="warning">
+          <Alert color="warning" className="api-alert">
             You need to{" "}
             <a
               href="#/"
-              class="alert-link"
+              className="alert-link"
               onClick={(e) => handle(e, handleConsent)}
             >
               consent to get access to users api
@@ -104,22 +124,17 @@ export const ExternalApiComponent = () => {
         )}
 
         {state.error === "login_required" && (
-          <Alert color="warning">
+          <Alert color="warning" className="api-alert">
             You need to{" "}
             <a
               href="#/"
-              class="alert-link"
+              className="alert-link"
               onClick={(e) => handle(e, handleLoginAgain)}
             >
               log in again
             </a>
           </Alert>
         )}
-
-        <h1>External API</h1>
-        <p className="lead">
-          Ping an external API by clicking the button below.
-        </p>
 
         <p>
           This will call a local API on port 3001 that would have been started
@@ -129,7 +144,7 @@ export const ExternalApiComponent = () => {
         </p>
 
         {!audience && (
-          <Alert color="warning">
+          <Alert color="warning" className="api-alert">
             <p>
               You can't call the API at the moment because your application does
               not have any configuration for <code>audience</code>, or it is
@@ -173,15 +188,6 @@ export const ExternalApiComponent = () => {
             </p>
           </Alert>
         )}
-
-        <Button
-          color="primary"
-          className="mt-5"
-          onClick={callApi}
-          disabled={!audience}
-        >
-          Ping API
-        </Button>
       </div>
 
       <div className="result-block-container">
@@ -194,7 +200,7 @@ export const ExternalApiComponent = () => {
           </div>
         )}
       </div>
-    </>
+    </div>
   );
 };
 

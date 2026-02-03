@@ -1,7 +1,7 @@
 import configJson from "./auth_config.json";
 
 export function getConfig() {
-  const audience = "https://ciamlab.onrender.com/audience";
+  const audience = "https://ciamlab.onrender.com/api";
 
   return {
     domain: configJson.domain,

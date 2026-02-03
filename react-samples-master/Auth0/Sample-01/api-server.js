@@ -8,7 +8,7 @@ const { auth } = require("express-oauth2-jwt-bearer");
 const authConfig = {
   domain: "identity-auth0.cic-demo-platform.auth0app.com",
   clientId: "Iwab1kMZj0fPOTZnWwtt5KI5yTBTOrLV",
-  audience: "https://ciamlab.onrender.com/audience",
+  audience: "https://ciamlab.onrender.com/api",
   appOrigin: "https://ciamlab.onrender.com",
   apiOrigin: "https://ciamlab.onrender.com"
 };
