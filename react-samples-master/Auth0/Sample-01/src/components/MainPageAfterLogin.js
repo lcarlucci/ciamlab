@@ -9,9 +9,7 @@ const MainPageAfterLogin = () => {
   const [cartVisible, setCartVisible] = useState(false);
   const [activeCategory, setActiveCategory] = useState("idg");
 
-  // Stato per slider e dropdown dei servizi
-  const [serviceValues, setServiceValues] = useState({}); 
-  // struttura: { "User Lifecycle Management": { users: 5000, implType: "New Implementation" }, ... }
+  const [serviceValues, setServiceValues] = useState({});
 
   const categories = [
     { id: "idg", label: "Identity Governance", tooltip: "Manage user lifecycle, compliance and identity policies." },
@@ -36,7 +34,6 @@ const MainPageAfterLogin = () => {
     ],
   };
 
-  // Aggiorna slider
   const handleSliderChange = (serviceTitle, value) => {
     setServiceValues(prev => ({
       ...prev,
@@ -47,7 +44,6 @@ const MainPageAfterLogin = () => {
     }));
   };
 
-  // Aggiorna dropdown
   const handleSelectChange = (serviceTitle, value) => {
     setServiceValues(prev => ({
       ...prev,
@@ -58,7 +54,6 @@ const MainPageAfterLogin = () => {
     }));
   };
 
-  // Aggiungi al carrello usando i valori correnti
   const addToCart = (service) => {
     const { title, users } = service;
     const implType = serviceValues[title]?.implType || "New Implementation";
@@ -66,7 +61,7 @@ const MainPageAfterLogin = () => {
     const item = `${title} (${implType}, ${userCount} users)`;
     if (!cart.includes(item)) {
       setCart([...cart, item]);
-      setCartVisible(true); // apre il carrello automaticamente
+      setCartVisible(true);
     }
   };
 
@@ -74,7 +69,43 @@ const MainPageAfterLogin = () => {
 
   return (
     <div className="main-container">
-      <h2 className="welcome-title">Welcome, {user.name}!</h2>
+      <header className="portal-hero">
+        <div className="hero-text">
+          <span className="eyebrow">Cyber & IAM Services</span>
+          <h2 className="welcome-title">Welcome, {user.name}!</h2>
+          <p className="hero-subtitle">
+            Compose your Identity & Access roadmap by selecting the services you
+            need. Adjust scope, delivery model, and users impacted in a few
+            clicks.
+          </p>
+          <div className="hero-actions">
+            <button className="primary-cta" onClick={() => setActiveCategory("idg")}>
+              Start with Governance
+            </button>
+            <div className="cart-summary">
+              <span className="cart-summary-label">Cart</span>
+              <span className="cart-summary-count">{cart.length}</span>
+              <span className="cart-summary-text">
+                {cart.length === 0 ? "No items yet" : "Items selected"}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="hero-metrics">
+          <div className="metric-card">
+            <span className="metric-value">4</span>
+            <span className="metric-label">Service Pillars</span>
+          </div>
+          <div className="metric-card">
+            <span className="metric-value">12+</span>
+            <span className="metric-label">Delivery Modules</span>
+          </div>
+          <div className="metric-card">
+            <span className="metric-value">99.9%</span>
+            <span className="metric-label">Availability</span>
+          </div>
+        </div>
+      </header>
 
       <nav className="service-menu">
         <ul>
@@ -94,10 +125,18 @@ const MainPageAfterLogin = () => {
       <section className="services-catalog">
         {servicesData[activeCategory].map((service, index) => (
           <div key={index} className="service-card">
-            <h3>{service.title}</h3>
+            <div className="service-header">
+              <h3>{service.title}</h3>
+              <span className="service-tag">{activeCategory.toUpperCase()}</span>
+            </div>
             <p>{service.description}</p>
             <div className="service-config">
-              <label>Users impacted:</label>
+              <div className="config-row">
+                <label>Users impacted</label>
+                <span className="config-value">
+                  {serviceValues[service.title]?.users || service.users}
+                </span>
+              </div>
               <input
                 type="range"
                 min="1"
@@ -106,9 +145,8 @@ const MainPageAfterLogin = () => {
                 value={serviceValues[service.title]?.users || service.users}
                 onChange={(e) => handleSliderChange(service.title, e.target.value)}
               />
-              <span>{serviceValues[service.title]?.users || service.users}</span>
 
-              <label>Implementation type:</label>
+              <label>Implementation type</label>
               <select
                 value={serviceValues[service.title]?.implType || "New Implementation"}
                 onChange={(e) => handleSelectChange(service.title, e.target.value)}
@@ -144,7 +182,8 @@ const MainPageAfterLogin = () => {
         onClick={() => setCartVisible(!cartVisible)}
         title="Toggle cart"
       >
-        🛒 {cart.length}
+        Cart
+        <span className="cart-badge">{cart.length}</span>
       </button>
     </div>
   );
