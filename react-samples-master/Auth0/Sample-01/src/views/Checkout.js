@@ -33,7 +33,7 @@ const Checkout = () => {
   const subtotal = effectiveCart.length * pricePerItem;
   const formatter = new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "USD",
+    currency: "EUR",
     maximumFractionDigits: 0,
   });
 
@@ -141,7 +141,7 @@ const Checkout = () => {
         totals: {
           subtotal,
           pricePerItem,
-          currency: "USD",
+          currency: "EUR",
         },
         billing,
         payment: {
