@@ -71,6 +71,8 @@ const Checkout = () => {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [errors, setErrors] = useState({});
   const [submitState, setSubmitState] = useState({ status: "idle", message: "" });
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [lastOrder, setLastOrder] = useState(null);
 
   useEffect(() => {
     if (!user) return;
@@ -165,7 +167,9 @@ const Checkout = () => {
 
       localStorage.setItem("ciam_cart", "[]");
       setStoredCart([]);
+      setLastOrder(order);
       setSubmitState({ status: "success", message: "Order placed successfully." });
+      setShowSuccessDialog(true);
     } catch (err) {
       setSubmitState({
         status: "error",
@@ -556,6 +560,45 @@ const Checkout = () => {
           ) : null}
         </aside>
       </div>
+
+      {showSuccessDialog ? (
+        <div className="checkout-dialog-overlay" role="dialog" aria-modal="true">
+          <div className="checkout-dialog">
+            <div className="dialog-badge">
+              <span className="dialog-icon" aria-hidden="true">✓</span>
+            </div>
+            <h2>Order confirmed</h2>
+            <p>
+              Thank you! Your IAM service request has been received and is now
+              in processing.
+            </p>
+            <div className="dialog-meta">
+              <div>
+                <span className="dialog-label">Order ID</span>
+                <span className="dialog-value">{lastOrder?.id || "—"}</span>
+              </div>
+              <div>
+                <span className="dialog-label">Total</span>
+                <span className="dialog-value">{formatter.format(subtotal)}</span>
+              </div>
+              <div>
+                <span className="dialog-label">Items</span>
+                <span className="dialog-value">{effectiveCart.length}</span>
+              </div>
+            </div>
+            <button
+              className="dialog-primary"
+              type="button"
+              onClick={() => {
+                setShowSuccessDialog(false);
+                navigate("/home");
+              }}
+            >
+              Ok, back to Home
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };

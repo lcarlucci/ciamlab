@@ -371,75 +371,78 @@ export const ProfileComponent = () => {
                     <span className="status-badge">{order.status || "Paid"}</span>
                   </div>
 
-                  <div className="order-section">
-                    <h4>Items</h4>
-                    <ul className="order-items">
-                      {(order.items || []).map((item, idx) => (
-                        <li key={`${order.id}-${idx}`}>{item}</li>
-                      ))}
-                    </ul>
-                  </div>
+                  <div className="order-panels">
+                    <div className="order-panel">
+                      <h4>Order summary</h4>
+                      <div className="order-kv">
+                        <span className="order-label">Items</span>
+                        <span className="order-value">{(order.items || []).length}</span>
+                      </div>
+                      <div className="order-kv">
+                        <span className="order-label">Subtotal</span>
+                        <span className="order-value">
+                          {order.totals?.currency || "USD"} {order.totals?.subtotal}
+                        </span>
+                      </div>
+                      <div className="order-kv">
+                        <span className="order-label">Price per item</span>
+                        <span className="order-value">
+                          {order.totals?.currency || "USD"} {order.totals?.pricePerItem}
+                        </span>
+                      </div>
+                    </div>
 
-                  <div className="order-section">
-                    <h4>Billing</h4>
-                    <div className="order-grid">
-                      <div>
+                    <div className="order-panel">
+                      <h4>Billing</h4>
+                      <div className="order-kv">
                         <span className="order-label">Full name</span>
                         <span className="order-value">{order.billing?.fullName}</span>
                       </div>
-                      <div>
+                      <div className="order-kv">
                         <span className="order-label">Email</span>
                         <span className="order-value">{order.billing?.email}</span>
                       </div>
-                      <div>
+                      <div className="order-kv">
                         <span className="order-label">Company</span>
                         <span className="order-value">{order.billing?.company}</span>
                       </div>
-                      <div>
+                      <div className="order-kv">
                         <span className="order-label">Phone</span>
                         <span className="order-value">{order.billing?.phone}</span>
                       </div>
-                      <div>
+                      <div className="order-kv">
                         <span className="order-label">Address</span>
-                        <span className="order-value">{order.billing?.address}</span>
+                        <span className="order-value">
+                          {order.billing?.address}, {order.billing?.city}, {order.billing?.country}
+                        </span>
                       </div>
-                      <div>
-                        <span className="order-label">City</span>
-                        <span className="order-value">{order.billing?.city}</span>
-                      </div>
-                      <div>
-                        <span className="order-label">Country</span>
-                        <span className="order-value">{order.billing?.country}</span>
-                      </div>
-                      <div>
+                      <div className="order-kv">
                         <span className="order-label">VAT / Tax ID</span>
                         <span className="order-value">{order.billing?.vat}</span>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="order-section">
-                    <h4>Payment</h4>
-                    <div className="order-grid">
-                      <div>
+                    <div className="order-panel">
+                      <h4>Payment</h4>
+                      <div className="order-kv">
                         <span className="order-label">Method</span>
                         <span className="order-value">{order.payment?.method}</span>
                       </div>
                       {order.payment?.card ? (
                         <>
-                          <div>
+                          <div className="order-kv">
                             <span className="order-label">Card number</span>
                             <span className="order-value">{order.payment.card.number}</span>
                           </div>
-                          <div>
+                          <div className="order-kv">
                             <span className="order-label">Expiry</span>
                             <span className="order-value">{order.payment.card.expiry}</span>
                           </div>
-                          <div>
+                          <div className="order-kv">
                             <span className="order-label">CVV</span>
                             <span className="order-value">{order.payment.card.cvv}</span>
                           </div>
-                          <div>
+                          <div className="order-kv">
                             <span className="order-label">Cardholder</span>
                             <span className="order-value">{order.payment.card.holder}</span>
                           </div>
@@ -447,19 +450,19 @@ export const ProfileComponent = () => {
                       ) : null}
                       {order.payment?.invoice ? (
                         <>
-                          <div>
+                          <div className="order-kv">
                             <span className="order-label">PEC</span>
                             <span className="order-value">{order.payment.invoice.pecEmail}</span>
                           </div>
-                          <div>
+                          <div className="order-kv">
                             <span className="order-label">SDI</span>
                             <span className="order-value">{order.payment.invoice.sdiCode}</span>
                           </div>
-                          <div>
+                          <div className="order-kv">
                             <span className="order-label">VAT</span>
                             <span className="order-value">{order.payment.invoice.vatNumber}</span>
                           </div>
-                          <div>
+                          <div className="order-kv">
                             <span className="order-label">Billing contact</span>
                             <span className="order-value">{order.payment.invoice.billingContact}</span>
                           </div>
@@ -468,35 +471,21 @@ export const ProfileComponent = () => {
                     </div>
                   </div>
 
-                  <div className="order-section totals">
-                    <div className="order-total">
-                      <span>Subtotal</span>
-                      <span>
-                        {order.totals?.currency || "USD"} {order.totals?.subtotal}
-                      </span>
-                    </div>
-                    <div className="order-total muted">
-                      <span>Price per item</span>
-                      <span>
-                        {order.totals?.currency || "USD"} {order.totals?.pricePerItem}
-                      </span>
+                  <div className="order-items-row">
+                    <span className="order-label">Items</span>
+                    <div className="order-items-chips">
+                      {(order.items || []).map((item, idx) => (
+                        <span key={`${order.id}-${idx}`} className="order-chip">
+                          {item}
+                        </span>
+                      ))}
                     </div>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="orders-empty-card">
-              <div className="orders-empty-title">No orders yet</div>
-              <p>
-                When the customer completes a checkout, this section will show
-                order history, status, and billing references.
-              </p>
-              <div className="orders-empty-meta">
-                <span>Next step:</span>
-                <span>Connect the order system</span>
-              </div>
-            </div>
+            <div className="orders-empty-text">No orders placed yet.</div>
           )}
         </div>
       </section>
