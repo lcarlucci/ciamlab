@@ -41,7 +41,16 @@ app.use(
           "https://ciamlab.onrender.com/*"
         ],
         scriptSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", "data:", "https://*.googleusercontent.com", "https://*.giphy.com", "https://trevonix.com", "https://s.gravatar.com"],
+        imgSrc: [
+          "'self'",
+          "data:",
+          "https://*.googleusercontent.com",
+          "https://*.giphy.com",
+          "https://trevonix.com",
+          "https://s.gravatar.com",
+          "https://*.gravatar.com",
+          "https://cdn.auth0.com"
+        ],
         styleSrc: ["'self'", "'unsafe-inline'"]
       },
     },
