@@ -59,7 +59,7 @@ export const ExternalApiComponent = () => {
   const decodeJwt = (jwt) => {
     const parts = jwt.split(".");
     if (parts.length !== 3) {
-      throw new Error("Token non in formato JWT.");
+      throw new Error("Token is not a JWT.");
     }
 
     const decodePart = (part) => {
@@ -91,7 +91,7 @@ export const ExternalApiComponent = () => {
     } catch (err) {
       setTokenHeader(null);
       setTokenPayload(null);
-      setTokenError(err?.message || "Impossibile decodificare il token.");
+      setTokenError(err?.message || "Unable to decode token.");
     }
 
     const response = await fetch(`${apiBase}/api/external`, {
@@ -226,7 +226,7 @@ export const ExternalApiComponent = () => {
       <div className="result-block-container">
         {state.showResult && (
           <div className="result-block" data-testid="api-result">
-            <h6 className="muted">Risposta API</h6>
+            <h6 className="muted">API Response</h6>
             <Highlight>
               <span>{JSON.stringify(state.apiMessage, null, 2)}</span>
             </Highlight>
@@ -234,7 +234,7 @@ export const ExternalApiComponent = () => {
         )}
         {state.showResult && (
           <div className="result-block" data-testid="jwt-result">
-            <h6 className="muted">JWT Decodificato</h6>
+            <h6 className="muted">Decoded JWT</h6>
             {tokenError ? (
               <Highlight>
                 <span>{tokenError}</span>

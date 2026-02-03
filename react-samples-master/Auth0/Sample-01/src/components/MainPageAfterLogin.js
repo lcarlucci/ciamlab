@@ -63,6 +63,11 @@ const MainPageAfterLogin = () => {
     }));
   };
 
+  const getRangeBackground = (value, min, max) => {
+    const pct = ((value - min) / (max - min)) * 100;
+    return `linear-gradient(90deg, var(--brand) 0%, var(--brand) ${pct}%, #d9e6d5 ${pct}%, #d9e6d5 100%)`;
+  };
+
   const addToCart = (service) => {
     const { title, users } = service;
     const implType = serviceValues[title]?.implType || "New Implementation";
@@ -154,12 +159,21 @@ const MainPageAfterLogin = () => {
                 min="1"
                 max="1000000"
                 step="1000"
+                className="service-range"
                 value={serviceValues[service.title]?.users || service.users}
+                style={{
+                  background: getRangeBackground(
+                    Number(serviceValues[service.title]?.users || service.users),
+                    1,
+                    1000000
+                  )
+                }}
                 onChange={(e) => handleSliderChange(service.title, e.target.value)}
               />
 
               <label>Implementation type</label>
               <select
+                className="service-select"
                 value={serviceValues[service.title]?.implType || "New Implementation"}
                 onChange={(e) => handleSelectChange(service.title, e.target.value)}
               >

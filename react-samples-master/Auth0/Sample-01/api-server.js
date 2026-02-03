@@ -91,11 +91,11 @@ app.patch("/api/user/phone", checkJwt, async (req, res) => {
   const userId = req.auth?.payload?.sub;
 
   if (!userId) {
-    return res.status(400).json({ message: "User id non disponibile." });
+    return res.status(400).json({ message: "User id not available." });
   }
 
   if (!phoneNumber) {
-    return res.status(400).json({ message: "phoneNumber � obbligatorio." });
+    return res.status(400).json({ message: "phoneNumber is required." });
   }
 
   try {
@@ -117,16 +117,16 @@ app.patch("/api/user/phone", checkJwt, async (req, res) => {
 
     if (!response.ok) {
       return res.status(response.status).json({
-        message: data?.message || "Errore durante l'aggiornamento del numero di telefono.",
+        message: data?.message || "Error while updating phone number.",
       });
     }
 
     return res.json({
-      message: "Numero di telefono aggiornato.",
+      message: "Phone number updated.",
       phoneNumber: data?.user_metadata?.phone_number || phoneNumber,
     });
   } catch (error) {
-    return res.status(500).json({ message: error?.message || "Errore server." });
+    return res.status(500).json({ message: error?.message || "Server error." });
   }
 });
 
@@ -147,11 +147,11 @@ app.patch("/api/user/profile", checkJwt, async (req, res) => {
   const userId = req.auth?.payload?.sub;
 
   if (!userId) {
-    return res.status(400).json({ message: "User id non disponibile." });
+    return res.status(400).json({ message: "User id not available." });
   }
 
   if (!field || !ALLOWED_USER_METADATA_FIELDS.has(field)) {
-    return res.status(400).json({ message: "Campo non valido." });
+    return res.status(400).json({ message: "Invalid field." });
   }
 
   const value = typeof valueRaw === "string" ? valueRaw.trim() : valueRaw;
@@ -176,17 +176,17 @@ app.patch("/api/user/profile", checkJwt, async (req, res) => {
 
     if (!response.ok) {
       return res.status(response.status).json({
-        message: data?.message || "Errore durante l'aggiornamento del profilo.",
+        message: data?.message || "Error while updating profile.",
       });
     }
 
     return res.json({
-      message: "Profilo aggiornato.",
+      message: "Profile updated.",
       field,
       value: data?.user_metadata?.[field] ?? updateValue,
     });
   } catch (error) {
-    return res.status(500).json({ message: error?.message || "Errore server." });
+    return res.status(500).json({ message: error?.message || "Server error." });
   }
 });
 
