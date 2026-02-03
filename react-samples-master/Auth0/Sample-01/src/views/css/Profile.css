@@ -111,21 +111,53 @@
   border: 1px solid rgba(15, 29, 18, 0.08);
 }
 
-.phone-label {
-  font-weight: 600;
+/* Editable fields */
+.profile-fields {
+  margin-top: 20px;
+  display: grid;
+  gap: 14px;
+}
+
+.profile-field {
+  background: var(--surface-soft);
+  border-radius: 14px;
+  padding: 14px 16px;
+  border: 1px solid rgba(15, 29, 18, 0.08);
+  display: grid;
+  gap: 8px;
+}
+
+.field-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.field-label {
+  font-weight: 700;
   color: var(--ink);
 }
 
-.phone-input {
-  max-width: 320px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid rgba(15, 29, 18, 0.2);
+.field-note {
+  font-size: 0.85rem;
+  color: var(--ink-muted);
 }
 
-.phone-toggle-button {
+.field-view {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.field-value {
+  color: var(--ink-muted);
+}
+
+.field-edit-button {
   width: fit-content;
-  padding: 8px 14px;
+  padding: 6px 12px;
   border-radius: 999px;
   border: 1px solid rgba(134, 188, 37, 0.4);
   background: var(--surface);
@@ -134,9 +166,27 @@
   font-weight: 600;
 }
 
-.phone-save-button {
+.field-edit {
+  display: grid;
+  gap: 8px;
+}
+
+.field-input {
+  max-width: 360px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 29, 18, 0.2);
+}
+
+.field-edit-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.field-save-button {
   width: fit-content;
-  padding: 10px 18px;
+  padding: 8px 16px;
   border-radius: 999px;
   border: none;
   background: var(--brand);
@@ -147,25 +197,36 @@
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.phone-save-button:hover {
+.field-save-button:hover {
   transform: translateY(-1px);
   box-shadow: 0 12px 24px rgba(134, 188, 37, 0.28);
 }
 
-.phone-save-button:disabled {
+.field-save-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
-.phone-status {
-  font-size: 14px;
+.field-cancel-button {
+  width: fit-content;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 29, 18, 0.2);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  font-weight: 600;
 }
 
-.phone-status.success {
+.field-status {
+  font-size: 0.85rem;
+}
+
+.field-status.success {
   color: var(--brand-dark);
 }
 
-.phone-status.error {
+.field-status.error {
   color: #a32020;
 }
 

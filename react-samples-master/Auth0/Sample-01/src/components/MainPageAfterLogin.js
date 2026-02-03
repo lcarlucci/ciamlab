@@ -116,20 +116,7 @@ const MainPageAfterLogin = () => {
             </div>
           </div>
         </div>
-        <div className="hero-metrics">
-          <div className="metric-card">
-            <span className="metric-value">4</span>
-            <span className="metric-label">Service Pillars</span>
-          </div>
-          <div className="metric-card">
-            <span className="metric-value">12+</span>
-            <span className="metric-label">Delivery Modules</span>
-          </div>
-          <div className="metric-card">
-            <span className="metric-value">99.9%</span>
-            <span className="metric-label">Availability</span>
-          </div>
-        </div>
+        <div className="hero-metrics" />
       </header>
 
       <nav className="service-menu">

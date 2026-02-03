@@ -15,6 +15,9 @@ export const ExternalApiComponent = () => {
     apiMessage: "",
     error: null,
   });
+  const [tokenPayload, setTokenPayload] = useState(null);
+  const [tokenHeader, setTokenHeader] = useState(null);
+  const [tokenError, setTokenError] = useState("");
 
   const { getAccessTokenSilently, loginWithPopup, getAccessTokenWithPopup } =
     useAuth0();
@@ -53,6 +56,25 @@ export const ExternalApiComponent = () => {
     await callApi();
   };
 
+  const decodeJwt = (jwt) => {
+    const parts = jwt.split(".");
+    if (parts.length !== 3) {
+      throw new Error("Token non in formato JWT.");
+    }
+
+    const decodePart = (part) => {
+      const base64 = part.replace(/-/g, "+").replace(/_/g, "/");
+      const padded = base64.padEnd(base64.length + (4 - (base64.length % 4)) % 4, "=");
+      const json = atob(padded);
+      return JSON.parse(json);
+    };
+
+    return {
+      header: decodePart(parts[0]),
+      payload: decodePart(parts[1]),
+    };
+  };
+
   const callApi = async () => {
   try {
     const token = await getAccessTokenSilently({
@@ -60,6 +82,17 @@ export const ExternalApiComponent = () => {
       scope: "openid profile email",
 
     });
+
+    try {
+      const decoded = decodeJwt(token);
+      setTokenHeader(decoded.header);
+      setTokenPayload(decoded.payload);
+      setTokenError("");
+    } catch (err) {
+      setTokenHeader(null);
+      setTokenPayload(null);
+      setTokenError(err?.message || "Impossibile decodificare il token.");
+    }
 
     const response = await fetch(`${apiBase}/api/external`, {
       headers: {
@@ -193,10 +226,24 @@ export const ExternalApiComponent = () => {
       <div className="result-block-container">
         {state.showResult && (
           <div className="result-block" data-testid="api-result">
-            <h6 className="muted">Result</h6>
+            <h6 className="muted">Risposta API</h6>
             <Highlight>
               <span>{JSON.stringify(state.apiMessage, null, 2)}</span>
             </Highlight>
+          </div>
+        )}
+        {state.showResult && (
+          <div className="result-block" data-testid="jwt-result">
+            <h6 className="muted">JWT Decodificato</h6>
+            {tokenError ? (
+              <Highlight>
+                <span>{tokenError}</span>
+              </Highlight>
+            ) : (
+              <Highlight>
+                <span>{JSON.stringify({ header: tokenHeader, payload: tokenPayload }, null, 2)}</span>
+              </Highlight>
+            )}
           </div>
         )}
       </div>

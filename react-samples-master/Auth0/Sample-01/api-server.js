@@ -130,6 +130,66 @@ app.patch("/api/user/phone", checkJwt, async (req, res) => {
   }
 });
 
+const ALLOWED_USER_METADATA_FIELDS = new Set([
+  "name",
+  "given_name",
+  "family_name",
+  "email",
+  "phone_number",
+  "birthdate",
+  "zoneinfo",
+  "company",
+]);
+
+app.patch("/api/user/profile", checkJwt, async (req, res) => {
+  const field = (req.body?.field || "").trim();
+  const valueRaw = req.body?.value ?? "";
+  const userId = req.auth?.payload?.sub;
+
+  if (!userId) {
+    return res.status(400).json({ message: "User id non disponibile." });
+  }
+
+  if (!field || !ALLOWED_USER_METADATA_FIELDS.has(field)) {
+    return res.status(400).json({ message: "Campo non valido." });
+  }
+
+  const value = typeof valueRaw === "string" ? valueRaw.trim() : valueRaw;
+  const updateValue = value === "" ? null : value;
+
+  try {
+    const mgmtToken = await getManagementApiToken();
+    const response = await fetch(`https://${authConfig.domain}/api/v2/users/${encodeURIComponent(userId)}`, {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${mgmtToken}`,
+      },
+      body: JSON.stringify({
+        user_metadata: {
+          [field]: updateValue,
+        },
+      }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        message: data?.message || "Errore durante l'aggiornamento del profilo.",
+      });
+    }
+
+    return res.json({
+      message: "Profilo aggiornato.",
+      field,
+      value: data?.user_metadata?.[field] ?? updateValue,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error?.message || "Errore server." });
+  }
+});
+
 // API protetta
 app.get("/api/external", checkJwt, (req, res) => {
   res.send({

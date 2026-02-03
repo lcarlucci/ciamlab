@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useAuth0, withAuthenticationRequired } from "@auth0/auth0-react";
 import Loading from "../components/Loading";
 import { getConfig } from "../config";
@@ -10,10 +10,9 @@ const PASSWORD_RESET_CONNECTION = "Username-Password-Authentication";
 export const ProfileComponent = () => {
   const { user, getAccessTokenSilently } = useAuth0();
   const [resetState, setResetState] = useState({ status: "idle", message: "" });
-  const [phoneState, setPhoneState] = useState({ status: "idle", message: "" });
-  const [phoneInput, setPhoneInput] = useState("");
-  const [savedPhone, setSavedPhone] = useState("");
-  const [showPhoneForm, setShowPhoneForm] = useState(false);
+  const [editingField, setEditingField] = useState(null);
+  const [fieldValues, setFieldValues] = useState({});
+  const [fieldStatus, setFieldStatus] = useState({});
   const config = getConfig();
 
   const mockUser = {
@@ -21,7 +20,10 @@ export const ProfileComponent = () => {
     name: "Test User",
     email: "test@domain.com",
     sub: "auth0|test-user",
-    user_metadata: { phone_number: "+390000000000" },
+    user_metadata: {
+      phone_number: "+390000000000",
+      company: "Deloitte",
+    },
   };
 
   const currentUser = DEBUG_BYPASS_AUTH ? mockUser : user;
@@ -29,11 +31,35 @@ export const ProfileComponent = () => {
   const provider = currentUser?.sub?.split("|")[0];
   const isDbUser = provider === "auth0";
 
+  const editableFields = useMemo(
+    () => [
+      { key: "name", label: "Nome completo", placeholder: "Mario Rossi" },
+      { key: "given_name", label: "Nome", placeholder: "Mario" },
+      { key: "family_name", label: "Cognome", placeholder: "Rossi" },
+      {
+        key: "email",
+        label: "Email (profilo)",
+        placeholder: "mario.rossi@azienda.com",
+        note: "Non cambia la email di accesso.",
+      },
+      { key: "phone_number", label: "Telefono", placeholder: "+39 333 123 4567" },
+      { key: "birthdate", label: "Data di nascita", placeholder: "1990-01-01" },
+      { key: "zoneinfo", label: "Time zone", placeholder: "Europe/Rome" },
+      { key: "company", label: "Azienda", placeholder: "Nome Azienda" },
+    ],
+    []
+  );
+
   useEffect(() => {
-    const currentPhone = currentUser?.user_metadata?.phone_number || "";
-    setPhoneInput(currentPhone);
-    setSavedPhone(currentPhone);
-  }, [currentUser]);
+    if (!currentUser) return;
+    const nextValues = {};
+    editableFields.forEach((field) => {
+      const metaValue = currentUser?.user_metadata?.[field.key];
+      const rootValue = currentUser?.[field.key];
+      nextValues[field.key] = metaValue ?? rootValue ?? "";
+    });
+    setFieldValues(nextValues);
+  }, [currentUser, editableFields]);
 
   const providerMessage = !isDbUser
     ? provider === "google-oauth2"
@@ -83,13 +109,12 @@ export const ProfileComponent = () => {
     }
   };
 
-  const handlePhoneSave = async () => {
-    if (!phoneInput.trim()) {
-      setPhoneState({ status: "error", message: "Inserisci un numero di telefono valido." });
-      return;
-    }
-
-    setPhoneState({ status: "loading", message: "" });
+  const handleFieldSave = async (fieldKey) => {
+    const value = (fieldValues[fieldKey] || "").trim();
+    setFieldStatus((prev) => ({
+      ...prev,
+      [fieldKey]: { status: "loading", message: "" },
+    }));
 
     try {
       const token = await getAccessTokenSilently({
@@ -97,32 +122,43 @@ export const ProfileComponent = () => {
       });
 
       const apiBase = config.apiOrigin || window.location.origin;
-      const response = await fetch(`${apiBase}/api/user/phone`, {
+      const response = await fetch(`${apiBase}/api/user/profile`, {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
           authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ phoneNumber: phoneInput.trim() }),
+        body: JSON.stringify({ field: fieldKey, value }),
       });
 
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(data?.message || "Errore durante il salvataggio del telefono.");
+        throw new Error(data?.message || "Errore durante il salvataggio del profilo.");
       }
 
-      setSavedPhone(data.phoneNumber || phoneInput.trim());
-      setPhoneState({
-        status: "success",
-        message: "Numero di telefono aggiornato.",
-      });
+      setFieldStatus((prev) => ({
+        ...prev,
+        [fieldKey]: { status: "success", message: "Aggiornato." },
+      }));
+      setEditingField(null);
     } catch (err) {
-      setPhoneState({
-        status: "error",
-        message: err?.message || "Errore durante il salvataggio del telefono.",
-      });
+      setFieldStatus((prev) => ({
+        ...prev,
+        [fieldKey]: {
+          status: "error",
+          message: err?.message || "Errore durante il salvataggio del profilo.",
+        },
+      }));
     }
+  };
+
+  const handleCancelEdit = (fieldKey) => {
+    const metaValue = currentUser?.user_metadata?.[fieldKey];
+    const rootValue = currentUser?.[fieldKey];
+    const fallbackValue = metaValue ?? rootValue ?? "";
+    setFieldValues((prev) => ({ ...prev, [fieldKey]: fallbackValue }));
+    setEditingField(null);
   };
 
   return (
@@ -134,16 +170,9 @@ export const ProfileComponent = () => {
           className="profile-picture"
         />
         <div className="profile-info">
-          <h2>{currentUser?.user}</h2>
+          <h2>{currentUser?.name || currentUser?.email || "Utente"}</h2>
           <p>Email: {currentUser?.email}</p>
-          <p>Email verificata: {currentUser?.email_verified}</p>
-          <p>Given Name: {currentUser?.given_name}</p>
-          <p>Family Name: {currentUser?.family_name}</p>
-          <p>Compleanno {currentUser?.birthdate}</p>
-          <p>Info Zone: {currentUser?.zoneinfo}</p>
-          <p>Telefono: {currentUser?.phone_number}</p>
-          <p>Telefono Verificato: {currentUser?.phone_number_verified}</p>
-          <p>Telefono (profilo): {savedPhone || "�"}</p>
+          <p>Email verificata: {String(currentUser?.email_verified)}</p>
 
           <div className="profile-actions">
             <button
@@ -166,40 +195,74 @@ export const ProfileComponent = () => {
             ) : null}
           </div>
 
-          <div className="phone-actions">
-            <label className="phone-label">Numero di telefono</label>
-            <button
-              className="phone-toggle-button"
-              onClick={() => setShowPhoneForm((prev) => !prev)}
-              type="button"
-            >
-              {showPhoneForm ? "Annulla" : "Modifica numero"}
-            </button>
-            {showPhoneForm ? (
-              <>
-                <input
-                  id="phoneNumber"
-                  className="phone-input"
-                  type="tel"
-                  value={phoneInput}
-                  onChange={(event) => setPhoneInput(event.target.value)}
-                  placeholder="+39 333 123 4567"
-                />
-                <button
-                  className="phone-save-button"
-                  onClick={handlePhoneSave}
-                  disabled={phoneState.status === "loading"}
-                  type="button"
-                >
-                  {phoneState.status === "loading" ? "Salvataggio..." : "Salva numero"}
-                </button>
-              </>
-            ) : null}
-            {phoneState.message ? (
-              <div className={`phone-status ${phoneState.status}`}>
-                {phoneState.message}
-              </div>
-            ) : null}
+          <div className="profile-fields">
+            {editableFields.map((field) => {
+              const status = fieldStatus[field.key];
+              const isEditing = editingField === field.key;
+              const value = fieldValues[field.key] || "";
+
+              return (
+                <div key={field.key} className="profile-field">
+                  <div className="field-meta">
+                    <span className="field-label">{field.label}</span>
+                    {field.note ? (
+                      <span className="field-note">{field.note}</span>
+                    ) : null}
+                  </div>
+
+                  {!isEditing ? (
+                    <div className="field-view">
+                      <span className="field-value">{value || "N/A"}</span>
+                      <button
+                        className="field-edit-button"
+                        onClick={() => setEditingField(field.key)}
+                        type="button"
+                      >
+                        Modifica
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="field-edit">
+                      <input
+                        className="field-input"
+                        type="text"
+                        value={value}
+                        placeholder={field.placeholder}
+                        onChange={(event) =>
+                          setFieldValues((prev) => ({
+                            ...prev,
+                            [field.key]: event.target.value,
+                          }))
+                        }
+                      />
+                      <div className="field-edit-actions">
+                        <button
+                          className="field-save-button"
+                          onClick={() => handleFieldSave(field.key)}
+                          disabled={status?.status === "loading"}
+                          type="button"
+                        >
+                          {status?.status === "loading" ? "Salvataggio..." : "Salva"}
+                        </button>
+                        <button
+                          className="field-cancel-button"
+                          onClick={() => handleCancelEdit(field.key)}
+                          type="button"
+                        >
+                          Annulla
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {status?.message ? (
+                    <div className={`field-status ${status.status}`}>
+                      {status.message}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
