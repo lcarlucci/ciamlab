@@ -24,9 +24,8 @@
 
 .profile-header {
   display: grid;
-  grid-template-columns: 140px 1fr;
-  gap: 24px;
-  align-items: start;
+  grid-template-columns: 1fr;
+  gap: 16px;
   background: var(--surface);
   border-radius: 20px;
   padding: 24px;
@@ -35,17 +34,23 @@
 }
 
 .profile-picture {
-  width: 120px;
-  height: 120px;
-  border-radius: 24px;
+  width: 96px;
+  height: 96px;
+  border-radius: 18px;
   object-fit: cover;
   border: 3px solid rgba(134, 188, 37, 0.3);
   box-shadow: 0 8px 18px rgba(15, 29, 18, 0.12);
 }
 
+.profile-info {
+  display: grid;
+  gap: 8px;
+  max-width: 720px;
+}
+
 .profile-info h2 {
   margin: 0 0 12px 0;
-  font-size: 1.6rem;
+  font-size: 1.4rem;
 }
 
 .profile-info p {
@@ -113,25 +118,22 @@
 
 /* Editable fields */
 .profile-fields {
-  margin-top: 20px;
+  margin-top: 12px;
   display: grid;
-  gap: 14px;
+  gap: 10px;
 }
 
 .profile-field {
-  background: var(--surface-soft);
-  border-radius: 14px;
-  padding: 14px 16px;
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 12px 14px;
   border: 1px solid rgba(15, 29, 18, 0.08);
   display: grid;
   gap: 8px;
 }
 
 .field-meta {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
+  display: none;
 }
 
 .field-label {
@@ -151,8 +153,14 @@
   gap: 12px;
 }
 
+.field-text {
+  display: grid;
+  gap: 4px;
+}
+
 .field-value {
   color: var(--ink-muted);
+  font-size: 0.95rem;
 }
 
 .field-edit-button {
@@ -164,6 +172,18 @@
   color: var(--brand-dark);
   cursor: pointer;
   font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.field-edit-button::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--brand);
+  display: inline-block;
 }
 
 .field-edit {
@@ -172,7 +192,7 @@
 }
 
 .field-input {
-  max-width: 360px;
+  max-width: 420px;
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid rgba(15, 29, 18, 0.2);
@@ -233,9 +253,5 @@
 @media (max-width: 768px) {
   .profile-container {
     padding: 24px 20px 80px;
-  }
-
-  .profile-header {
-    grid-template-columns: 1fr;
   }
 }

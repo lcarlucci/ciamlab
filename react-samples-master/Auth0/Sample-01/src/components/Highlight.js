@@ -4,8 +4,6 @@ import PropTypes from "prop-types";
 import hljs from "highlight.js";
 import "highlight.js/styles/monokai-sublime.css";
 
-const registeredLanguages = {};
-
 class Highlight extends Component {
   constructor(props) {
     super(props);
@@ -15,22 +13,7 @@ class Highlight extends Component {
   }
 
   componentDidMount() {
-    const { language } = this.props;
-
-    if (language && !registeredLanguages[language]) {
-      try {
-        const newLanguage = require(`highlight.js/lib/languages/${language}`);
-        hljs.registerLanguage(language, newLanguage);
-        registeredLanguages[language] = true;
-
-        this.setState({ loaded: true }, this.highlight);
-      } catch (e) {
-        console.error(e);
-        throw Error(`Cannot register the language ${language}`);
-      }
-    } else {
-      this.setState({ loaded: true });
-    }
+    this.setState({ loaded: true }, this.highlight);
   }
 
   componentDidUpdate() {
@@ -38,9 +21,12 @@ class Highlight extends Component {
   }
 
   highlight = () => {
-    this.codeNode &&
-      this.codeNode.current &&
+    if (!this.codeNode || !this.codeNode.current) return;
+    if (hljs.highlightElement) {
+      hljs.highlightElement(this.codeNode.current);
+    } else {
       hljs.highlightBlock(this.codeNode.current);
+    }
   };
 
   render() {
@@ -53,7 +39,7 @@ class Highlight extends Component {
 
     return (
       <pre className="rounded">
-        <code ref={this.codeNode} className={language}>
+        <code ref={this.codeNode} className={language ? `language-${language}` : ""}>
           {children}
         </code>
       </pre>

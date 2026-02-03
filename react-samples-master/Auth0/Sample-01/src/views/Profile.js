@@ -203,16 +203,15 @@ export const ProfileComponent = () => {
 
               return (
                 <div key={field.key} className="profile-field">
-                  <div className="field-meta">
-                    <span className="field-label">{field.label}</span>
-                    {field.note ? (
-                      <span className="field-note">{field.note}</span>
-                    ) : null}
-                  </div>
-
                   {!isEditing ? (
                     <div className="field-view">
-                      <span className="field-value">{value || "N/A"}</span>
+                      <div className="field-text">
+                        <span className="field-label">{field.label}</span>
+                        {field.note ? (
+                          <span className="field-note">{field.note}</span>
+                        ) : null}
+                        <span className="field-value">{value || "N/A"}</span>
+                      </div>
                       <button
                         className="field-edit-button"
                         onClick={() => setEditingField(field.key)}
