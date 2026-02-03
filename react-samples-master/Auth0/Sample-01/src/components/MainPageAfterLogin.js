@@ -1,11 +1,20 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
 import "./style/MainPageAfterLogin.css";
 
 const MainPageAfterLogin = () => {
   const { user } = useAuth0();
+  const navigate = useNavigate();
 
-  const [cart, setCart] = useState([]);
+  const [cart, setCart] = useState(() => {
+    try {
+      const stored = localStorage.getItem("ciam_cart");
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
   const [cartVisible, setCartVisible] = useState(false);
   const [activeCategory, setActiveCategory] = useState("idg");
 
@@ -67,6 +76,22 @@ const MainPageAfterLogin = () => {
 
   const removeFromCart = (item) => setCart(cart.filter(i => i !== item));
 
+  const proceedToCheckout = () => {
+    if (cart.length === 0) {
+      alert("Your cart is empty.");
+      return;
+    }
+
+    const confirmed = window.confirm("Proceed to checkout?");
+    if (!confirmed) return;
+
+    navigate("/checkout", { state: { cart } });
+  };
+
+  useEffect(() => {
+    localStorage.setItem("ciam_cart", JSON.stringify(cart));
+  }, [cart]);
+
   return (
     <div className="main-container">
       <header className="portal-hero">
@@ -79,11 +104,11 @@ const MainPageAfterLogin = () => {
             clicks.
           </p>
           <div className="hero-actions">
-            <button className="primary-cta" onClick={() => setActiveCategory("idg")}>
+            <button className="primary-cta" onClick={proceedToCheckout}>
               Start with Governance
             </button>
-            <div className="cart-summary">
-              <span className="cart-summary-label">Cart</span>
+            <div className="cart-summary" onClick={proceedToCheckout} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && proceedToCheckout()}>
+              <span className="cart-summary-label">Your cart</span>
               <span className="cart-summary-count">{cart.length}</span>
               <span className="cart-summary-text">
                 {cart.length === 0 ? "No items yet" : "Items selected"}
@@ -171,7 +196,7 @@ const MainPageAfterLogin = () => {
           </div>
         ))}
         {cart.length > 0 && (
-          <button className="proceed" onClick={() => alert("Proceed to checkout")}>
+          <button className="proceed" onClick={proceedToCheckout}>
             Proceed
           </button>
         )}

@@ -92,6 +92,12 @@
   border-radius: 999px;
   background: var(--surface-soft);
   border: 1px solid rgba(134, 188, 37, 0.3);
+  cursor: pointer;
+}
+
+.cart-summary:focus {
+  outline: 2px solid rgba(134, 188, 37, 0.5);
+  outline-offset: 2px;
 }
 
 .cart-summary-label {
