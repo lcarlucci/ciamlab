@@ -226,8 +226,6 @@
 }
 
 .admin-orders {
-  display: grid;
-  gap: 16px;
   padding-top: 6px;
   min-height: 0;
   max-height: none;
@@ -280,6 +278,8 @@
   min-height: 0;
   max-height: 180px;
   overflow: hidden;
+  margin-bottom: 10px;
+
 }
 
 .admin-order-card.clickable {
