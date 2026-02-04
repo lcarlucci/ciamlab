@@ -660,7 +660,8 @@ app.get("/api/admin/overview", checkApiJwt, async (req, res) => {
 
 app.post("/api/mfa/enroll-sms", checkMfaJwt, async (req, res) => {
   const userId = req.auth?.payload?.sub;
-  const phoneNumber = (req.body?.phoneNumber || "").trim();
+  const phoneNumberRaw = (req.body?.phoneNumber || "").trim();
+  const phoneNumber = phoneNumberRaw.replace(/[^\d+]/g, "");
   const mfaToken = req.body?.mfaToken;
   const replaceExisting = req.body?.replaceExisting !== false;
 
@@ -670,6 +671,12 @@ app.post("/api/mfa/enroll-sms", checkMfaJwt, async (req, res) => {
 
   if (!phoneNumber) {
     return res.status(400).json({ message: "Phone number is required." });
+  }
+
+  if (!/^\+\d{6,}$/.test(phoneNumber)) {
+    return res.status(400).json({
+      message: "Phone number must be in E.164 format (e.g. +393331234567).",
+    });
   }
 
   if (!mfaToken) {
@@ -710,7 +717,11 @@ app.post("/api/mfa/enroll-sms", checkMfaJwt, async (req, res) => {
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
       return res.status(response.status).json({
-        message: data?.message || "Unable to enroll phone number.",
+        message:
+          data?.error_description ||
+          data?.message ||
+          data?.error ||
+          "Unable to enroll phone number.",
       });
     }
 
