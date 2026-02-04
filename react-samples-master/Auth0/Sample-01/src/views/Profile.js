@@ -125,7 +125,8 @@ export const ProfileComponent = () => {
           authorizationParams: { audience: config.audience },
         });
         const payload = decodeJwtPayload(token);
-        setIsAdmin(hasAdminRole(payload));
+        const tokenAdmin = hasAdminRole(payload);
+        setIsAdmin(tokenAdmin);
 
         const apiBase = config.apiOrigin || window.location.origin;
         const response = await fetch(`${apiBase}/api/user/profile`, {
@@ -150,6 +151,18 @@ export const ProfileComponent = () => {
           });
           return next;
         });
+
+        if (!tokenAdmin) {
+          const rolesResponse = await fetch(`${apiBase}/api/user/roles`, {
+            headers: {
+              authorization: `Bearer ${token}`,
+            },
+          });
+          const rolesData = await rolesResponse.json().catch(() => ({}));
+          if (rolesResponse.ok && Array.isArray(rolesData.roles)) {
+            setIsAdmin(hasAdminRole({ roles: rolesData.roles }));
+          }
+        }
       } catch (err) {
         setFieldStatus((prev) => ({
           ...prev,

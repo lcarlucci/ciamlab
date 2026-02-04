@@ -523,6 +523,40 @@ app.get("/api/user/profile", checkJwt, async (req, res) => {
   }
 });
 
+app.get("/api/user/roles", checkJwt, async (req, res) => {
+  const userId = req.auth?.payload?.sub;
+
+  if (!userId) {
+    return res.status(400).json({ message: "User id not available." });
+  }
+
+  try {
+    const mgmtToken = await getManagementApiToken();
+    const response = await fetch(
+      `https://${authConfig.domain}/api/v2/users/${encodeURIComponent(userId)}/roles`,
+      {
+        method: "GET",
+        headers: {
+          authorization: `Bearer ${mgmtToken}`,
+        },
+      }
+    );
+
+    const data = await response.json().catch(() => ([]));
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        message: data?.message || "Error while fetching user roles.",
+      });
+    }
+
+    const roles = Array.isArray(data) ? data.map((role) => role.name).filter(Boolean) : [];
+    return res.json({ roles });
+  } catch (error) {
+    return res.status(500).json({ message: error?.message || "Server error." });
+  }
+});
+
 // API protetta
 app.get("/api/external", checkJwt, (req, res) => {
   res.send({
