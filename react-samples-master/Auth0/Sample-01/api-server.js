@@ -176,6 +176,26 @@ function isAdminPayload(payload) {
   });
 }
 
+async function hasAdminRoleForUser(userId) {
+  if (!userId) return false;
+  const mgmtToken = await getManagementApiToken();
+  const response = await fetch(
+    `https://${authConfig.domain}/api/v2/users/${encodeURIComponent(userId)}/roles`,
+    {
+      method: "GET",
+      headers: {
+        authorization: `Bearer ${mgmtToken}`,
+      },
+    }
+  );
+  const data = await response.json().catch(() => ([]));
+  if (!response.ok) {
+    return false;
+  }
+  const roles = Array.isArray(data) ? data.map((role) => role.name).filter(Boolean) : [];
+  return isAdminPayload({ roles });
+}
+
 function validateOrder(order) {
   const errors = {};
   const billing = order.billing || {};
@@ -346,7 +366,8 @@ app.patch("/api/orders/:orderId", checkJwt, async (req, res) => {
     return res.status(400).json({ message: "User id not available." });
   }
 
-  if (!isAdminPayload(req.auth?.payload)) {
+  const isAdmin = isAdminPayload(req.auth?.payload) || (await hasAdminRoleForUser(userId));
+  if (!isAdmin) {
     return res.status(403).json({ message: "Admin role required." });
   }
 
@@ -432,7 +453,8 @@ app.delete("/api/orders/:orderId", checkJwt, async (req, res) => {
     return res.status(400).json({ message: "User id not available." });
   }
 
-  if (!isAdminPayload(req.auth?.payload)) {
+  const isAdmin = isAdminPayload(req.auth?.payload) || (await hasAdminRoleForUser(userId));
+  if (!isAdmin) {
     return res.status(403).json({ message: "Admin role required." });
   }
 
