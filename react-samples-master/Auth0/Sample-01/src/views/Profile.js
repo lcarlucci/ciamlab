@@ -14,6 +14,10 @@ export const ProfileComponent = () => {
   const [fieldValues, setFieldValues] = useState({});
   const [fieldStatus, setFieldStatus] = useState({});
   const [orders, setOrders] = useState([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [editingOrderId, setEditingOrderId] = useState(null);
+  const [orderDrafts, setOrderDrafts] = useState({});
+  const [orderActionStatus, setOrderActionStatus] = useState({});
   const config = getConfig();
   const fallbackAvatar =
     "data:image/svg+xml;utf8," +
@@ -28,6 +32,35 @@ export const ProfileComponent = () => {
         "<path d='M38 152c12-30 36-46 52-46s40 16 52 46' fill='white'/>" +
       "</svg>"
     );
+
+  const decodeJwtPayload = (token) => {
+    if (!token) return null;
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = payload.padEnd(Math.ceil(payload.length / 4) * 4, "=");
+    try {
+      const decoded = atob(padded);
+      return JSON.parse(decoded);
+    } catch {
+      return null;
+    }
+  };
+
+  const hasAdminRole = (payload) => {
+    if (!payload) return false;
+    const roles = [];
+    Object.entries(payload).forEach(([key, value]) => {
+      if (!key.toLowerCase().includes("roles")) return;
+      if (Array.isArray(value)) {
+        roles.push(...value);
+      }
+    });
+    return roles.some((role) => {
+      const normalized = String(role || "").toLowerCase();
+      return normalized === "administrator" || normalized === "administator";
+    });
+  };
 
   const mockUser = {
     picture: process.env.PUBLIC_URL + "/assets/placeholder.png",
@@ -91,6 +124,8 @@ export const ProfileComponent = () => {
         const token = await getAccessTokenSilently({
           authorizationParams: { audience: config.audience },
         });
+        const payload = decodeJwtPayload(token);
+        setIsAdmin(hasAdminRole(payload));
 
         const apiBase = config.apiOrigin || window.location.origin;
         const response = await fetch(`${apiBase}/api/user/profile`, {
@@ -123,6 +158,7 @@ export const ProfileComponent = () => {
             message: err?.message || "Unable to load profile metadata.",
           },
         }));
+        setIsAdmin(false);
       }
     };
 
@@ -227,6 +263,170 @@ export const ProfileComponent = () => {
     const fallbackValue = metaValue ?? rootValue ?? "";
     setFieldValues((prev) => ({ ...prev, [fieldKey]: fallbackValue }));
     setEditingField(null);
+  };
+
+  const createOrderDraft = (order) => ({
+    id: order.id,
+    status: order.status || "Paid",
+    itemsText: (order.items || []).join("\n"),
+    billing: {
+      fullName: order.billing?.fullName || "",
+      email: order.billing?.email || "",
+      company: order.billing?.company || "",
+      phone: order.billing?.phone || "",
+      address: order.billing?.address || "",
+      city: order.billing?.city || "",
+      country: order.billing?.country || "",
+      vat: order.billing?.vat || "",
+    },
+    payment: {
+      method: order.payment?.method || "card",
+      card: {
+        number: order.payment?.card?.number || "",
+        expiry: order.payment?.card?.expiry || "",
+        cvv: order.payment?.card?.cvv || "",
+        holder: order.payment?.card?.holder || "",
+      },
+      invoice: {
+        pecEmail: order.payment?.invoice?.pecEmail || "",
+        sdiCode: order.payment?.invoice?.sdiCode || "",
+        vatNumber: order.payment?.invoice?.vatNumber || "",
+        billingContact: order.payment?.invoice?.billingContact || "",
+      },
+    },
+    totals: {
+      pricePerItem: order.totals?.pricePerItem || 12000,
+      currency: order.totals?.currency || "EUR",
+    },
+  });
+
+  const handleEditOrder = (order) => {
+    setEditingOrderId(order.id);
+    setOrderDrafts((prev) => ({
+      ...prev,
+      [order.id]: prev[order.id] || createOrderDraft(order),
+    }));
+  };
+
+  const handleCancelOrderEdit = (orderId) => {
+    setEditingOrderId(null);
+    setOrderDrafts((prev) => {
+      const next = { ...prev };
+      delete next[orderId];
+      return next;
+    });
+  };
+
+  const handleSaveOrder = async (orderId) => {
+    const draft = orderDrafts[orderId];
+    if (!draft) return;
+    setOrderActionStatus((prev) => ({
+      ...prev,
+      [orderId]: { status: "loading", message: "" },
+    }));
+
+    const items = draft.itemsText
+      .split("\n")
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    const updatedOrder = {
+      id: orderId,
+      createdAt: orders.find((o) => o.id === orderId)?.createdAt,
+      status: draft.status,
+      items,
+      totals: {
+        currency: draft.totals.currency,
+        pricePerItem: draft.totals.pricePerItem,
+        subtotal: items.length * draft.totals.pricePerItem,
+      },
+      billing: draft.billing,
+      payment: {
+        method: draft.payment.method,
+        card: draft.payment.method === "card" ? draft.payment.card : null,
+        invoice: draft.payment.method === "invoice" ? draft.payment.invoice : null,
+      },
+    };
+
+    try {
+      const token = await getAccessTokenSilently({
+        authorizationParams: { audience: config.audience },
+      });
+      const apiBase = config.apiOrigin || window.location.origin;
+      const response = await fetch(`${apiBase}/api/orders/${orderId}`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ order: updatedOrder }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.message || "Unable to update order.");
+      }
+
+      setOrders((prev) =>
+        prev.map((order) => (order.id === orderId ? data.order : order))
+      );
+      setEditingOrderId(null);
+      setOrderActionStatus((prev) => ({
+        ...prev,
+        [orderId]: { status: "success", message: "Order updated." },
+      }));
+    } catch (err) {
+      setOrderActionStatus((prev) => ({
+        ...prev,
+        [orderId]: {
+          status: "error",
+          message: err?.message || "Unable to update order.",
+        },
+      }));
+    }
+  };
+
+  const handleDeleteOrder = async (orderId) => {
+    if (!window.confirm("Delete this order? This action cannot be undone.")) {
+      return;
+    }
+
+    setOrderActionStatus((prev) => ({
+      ...prev,
+      [orderId]: { status: "loading", message: "" },
+    }));
+
+    try {
+      const token = await getAccessTokenSilently({
+        authorizationParams: { audience: config.audience },
+      });
+      const apiBase = config.apiOrigin || window.location.origin;
+      const response = await fetch(`${apiBase}/api/orders/${orderId}`, {
+        method: "DELETE",
+        headers: {
+          authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.message || "Unable to delete order.");
+      }
+
+      setOrders((prev) => prev.filter((order) => order.id !== orderId));
+      setOrderActionStatus((prev) => ({
+        ...prev,
+        [orderId]: { status: "success", message: "Order deleted." },
+      }));
+    } catch (err) {
+      setOrderActionStatus((prev) => ({
+        ...prev,
+        [orderId]: {
+          status: "error",
+          message: err?.message || "Unable to delete order.",
+        },
+      }));
+    }
   };
 
   return (
@@ -374,6 +574,45 @@ export const ProfileComponent = () => {
             <div className="orders-list">
               {orders.map((order) => (
                 <div key={order.id} className="order-card">
+                  {isAdmin ? (
+                    <div className="order-admin">
+                      {editingOrderId === order.id ? (
+                        <>
+                          <button
+                            className="order-admin-btn primary"
+                            type="button"
+                            onClick={() => handleSaveOrder(order.id)}
+                          >
+                            Save
+                          </button>
+                          <button
+                            className="order-admin-btn"
+                            type="button"
+                            onClick={() => handleCancelOrderEdit(order.id)}
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            className="order-admin-btn"
+                            type="button"
+                            onClick={() => handleEditOrder(order)}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="order-admin-btn danger"
+                            type="button"
+                            onClick={() => handleDeleteOrder(order.id)}
+                          >
+                            Delete
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  ) : null}
                   <div className="order-header">
                     <div>
                       <div className="order-id">Order {order.id}</div>
@@ -387,113 +626,523 @@ export const ProfileComponent = () => {
                   <div className="order-panels">
                     <div className="order-panel">
                       <h4>Order summary</h4>
-                      <div className="order-kv">
-                        <span className="order-label">Items</span>
-                        <span className="order-value">{(order.items || []).length}</span>
-                      </div>
-                      <div className="order-kv">
-                        <span className="order-label">Subtotal</span>
-                        <span className="order-value">
-                          {order.totals?.currency || "USD"} {order.totals?.subtotal}
-                        </span>
-                      </div>
-                      <div className="order-kv">
-                        <span className="order-label">Price per item</span>
-                        <span className="order-value">
-                          {order.totals?.currency || "USD"} {order.totals?.pricePerItem}
-                        </span>
-                      </div>
+                      {editingOrderId === order.id ? (
+                        <>
+                          <div className="order-kv">
+                            <span className="order-label">Status</span>
+                            <input
+                              className="order-input"
+                              type="text"
+                              value={orderDrafts[order.id]?.status || ""}
+                              onChange={(event) =>
+                                setOrderDrafts((prev) => ({
+                                  ...prev,
+                                  [order.id]: {
+                                    ...prev[order.id],
+                                    status: event.target.value,
+                                  },
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="order-kv">
+                            <span className="order-label">Price per item</span>
+                            <input
+                              className="order-input"
+                              type="number"
+                              value={orderDrafts[order.id]?.totals?.pricePerItem || ""}
+                              onChange={(event) =>
+                                setOrderDrafts((prev) => ({
+                                  ...prev,
+                                  [order.id]: {
+                                    ...prev[order.id],
+                                    totals: {
+                                      ...prev[order.id].totals,
+                                      pricePerItem: Number(event.target.value || 0),
+                                    },
+                                  },
+                                }))
+                              }
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="order-kv">
+                            <span className="order-label">Items</span>
+                            <span className="order-value">{(order.items || []).length}</span>
+                          </div>
+                          <div className="order-kv">
+                            <span className="order-label">Subtotal</span>
+                            <span className="order-value">
+                              {order.totals?.currency || "EUR"} {order.totals?.subtotal}
+                            </span>
+                          </div>
+                          <div className="order-kv">
+                            <span className="order-label">Price per item</span>
+                            <span className="order-value">
+                              {order.totals?.currency || "EUR"} {order.totals?.pricePerItem}
+                            </span>
+                          </div>
+                          <div className="order-kv">
+                            <span className="order-label">Status</span>
+                            <span className="order-value">{order.status || "Paid"}</span>
+                          </div>
+                        </>
+                      )}
                     </div>
 
                     <div className="order-panel">
                       <h4>Billing</h4>
-                      <div className="order-kv">
-                        <span className="order-label">Full name</span>
-                        <span className="order-value">{order.billing?.fullName}</span>
-                      </div>
-                      <div className="order-kv">
-                        <span className="order-label">Email</span>
-                        <span className="order-value">{order.billing?.email}</span>
-                      </div>
-                      <div className="order-kv">
-                        <span className="order-label">Company</span>
-                        <span className="order-value">{order.billing?.company}</span>
-                      </div>
-                      <div className="order-kv">
-                        <span className="order-label">Phone</span>
-                        <span className="order-value">{order.billing?.phone}</span>
-                      </div>
-                      <div className="order-kv">
-                        <span className="order-label">Address</span>
-                        <span className="order-value">
-                          {order.billing?.address}, {order.billing?.city}, {order.billing?.country}
-                        </span>
-                      </div>
-                      <div className="order-kv">
-                        <span className="order-label">VAT / Tax ID</span>
-                        <span className="order-value">{order.billing?.vat}</span>
-                      </div>
+                      {editingOrderId === order.id ? (
+                        <>
+                          <div className="order-kv">
+                            <span className="order-label">Full name</span>
+                            <input
+                              className="order-input"
+                              type="text"
+                              value={orderDrafts[order.id]?.billing?.fullName || ""}
+                              onChange={(event) =>
+                                setOrderDrafts((prev) => ({
+                                  ...prev,
+                                  [order.id]: {
+                                    ...prev[order.id],
+                                    billing: {
+                                      ...prev[order.id].billing,
+                                      fullName: event.target.value,
+                                    },
+                                  },
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="order-kv">
+                            <span className="order-label">Email</span>
+                            <input
+                              className="order-input"
+                              type="email"
+                              value={orderDrafts[order.id]?.billing?.email || ""}
+                              onChange={(event) =>
+                                setOrderDrafts((prev) => ({
+                                  ...prev,
+                                  [order.id]: {
+                                    ...prev[order.id],
+                                    billing: {
+                                      ...prev[order.id].billing,
+                                      email: event.target.value,
+                                    },
+                                  },
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="order-kv">
+                            <span className="order-label">Company</span>
+                            <input
+                              className="order-input"
+                              type="text"
+                              value={orderDrafts[order.id]?.billing?.company || ""}
+                              onChange={(event) =>
+                                setOrderDrafts((prev) => ({
+                                  ...prev,
+                                  [order.id]: {
+                                    ...prev[order.id],
+                                    billing: {
+                                      ...prev[order.id].billing,
+                                      company: event.target.value,
+                                    },
+                                  },
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="order-kv">
+                            <span className="order-label">Phone</span>
+                            <input
+                              className="order-input"
+                              type="tel"
+                              value={orderDrafts[order.id]?.billing?.phone || ""}
+                              onChange={(event) =>
+                                setOrderDrafts((prev) => ({
+                                  ...prev,
+                                  [order.id]: {
+                                    ...prev[order.id],
+                                    billing: {
+                                      ...prev[order.id].billing,
+                                      phone: event.target.value,
+                                    },
+                                  },
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="order-kv">
+                            <span className="order-label">Address</span>
+                            <input
+                              className="order-input"
+                              type="text"
+                              value={orderDrafts[order.id]?.billing?.address || ""}
+                              onChange={(event) =>
+                                setOrderDrafts((prev) => ({
+                                  ...prev,
+                                  [order.id]: {
+                                    ...prev[order.id],
+                                    billing: {
+                                      ...prev[order.id].billing,
+                                      address: event.target.value,
+                                    },
+                                  },
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="order-kv">
+                            <span className="order-label">City</span>
+                            <input
+                              className="order-input"
+                              type="text"
+                              value={orderDrafts[order.id]?.billing?.city || ""}
+                              onChange={(event) =>
+                                setOrderDrafts((prev) => ({
+                                  ...prev,
+                                  [order.id]: {
+                                    ...prev[order.id],
+                                    billing: {
+                                      ...prev[order.id].billing,
+                                      city: event.target.value,
+                                    },
+                                  },
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="order-kv">
+                            <span className="order-label">Country</span>
+                            <input
+                              className="order-input"
+                              type="text"
+                              value={orderDrafts[order.id]?.billing?.country || ""}
+                              onChange={(event) =>
+                                setOrderDrafts((prev) => ({
+                                  ...prev,
+                                  [order.id]: {
+                                    ...prev[order.id],
+                                    billing: {
+                                      ...prev[order.id].billing,
+                                      country: event.target.value,
+                                    },
+                                  },
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="order-kv">
+                            <span className="order-label">VAT / Tax ID</span>
+                            <input
+                              className="order-input"
+                              type="text"
+                              value={orderDrafts[order.id]?.billing?.vat || ""}
+                              onChange={(event) =>
+                                setOrderDrafts((prev) => ({
+                                  ...prev,
+                                  [order.id]: {
+                                    ...prev[order.id],
+                                    billing: {
+                                      ...prev[order.id].billing,
+                                      vat: event.target.value,
+                                    },
+                                  },
+                                }))
+                              }
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="order-kv">
+                            <span className="order-label">Full name</span>
+                            <span className="order-value">{order.billing?.fullName}</span>
+                          </div>
+                          <div className="order-kv">
+                            <span className="order-label">Email</span>
+                            <span className="order-value">{order.billing?.email}</span>
+                          </div>
+                          <div className="order-kv">
+                            <span className="order-label">Company</span>
+                            <span className="order-value">{order.billing?.company}</span>
+                          </div>
+                          <div className="order-kv">
+                            <span className="order-label">Phone</span>
+                            <span className="order-value">{order.billing?.phone}</span>
+                          </div>
+                          <div className="order-kv">
+                            <span className="order-label">Address</span>
+                            <span className="order-value">
+                              {order.billing?.address}, {order.billing?.city}, {order.billing?.country}
+                            </span>
+                          </div>
+                          <div className="order-kv">
+                            <span className="order-label">VAT / Tax ID</span>
+                            <span className="order-value">{order.billing?.vat}</span>
+                          </div>
+                        </>
+                      )}
                     </div>
 
                     <div className="order-panel">
                       <h4>Payment</h4>
-                      <div className="order-kv">
-                        <span className="order-label">Method</span>
-                        <span className="order-value">{order.payment?.method}</span>
-                      </div>
-                      {order.payment?.card ? (
+                      {editingOrderId === order.id ? (
                         <>
                           <div className="order-kv">
-                            <span className="order-label">Card number</span>
-                            <span className="order-value">{order.payment.card.number}</span>
+                            <span className="order-label">Method</span>
+                            <select
+                              className="order-input"
+                              value={orderDrafts[order.id]?.payment?.method || "card"}
+                              onChange={(event) =>
+                                setOrderDrafts((prev) => ({
+                                  ...prev,
+                                  [order.id]: {
+                                    ...prev[order.id],
+                                    payment: {
+                                      ...prev[order.id].payment,
+                                      method: event.target.value,
+                                    },
+                                  },
+                                }))
+                              }
+                            >
+                              <option value="card">Card</option>
+                              <option value="paypal">PayPal</option>
+                              <option value="gpay">Google Pay</option>
+                              <option value="applepay">Apple Pay</option>
+                              <option value="invoice">Invoice</option>
+                            </select>
                           </div>
-                          <div className="order-kv">
-                            <span className="order-label">Expiry</span>
-                            <span className="order-value">{order.payment.card.expiry}</span>
-                          </div>
-                          <div className="order-kv">
-                            <span className="order-label">CVV</span>
-                            <span className="order-value">{order.payment.card.cvv}</span>
-                          </div>
-                          <div className="order-kv">
-                            <span className="order-label">Cardholder</span>
-                            <span className="order-value">{order.payment.card.holder}</span>
-                          </div>
+
+                          {orderDrafts[order.id]?.payment?.method === "card" ? (
+                            <>
+                              <div className="order-kv">
+                                <span className="order-label">Card number</span>
+                                <input
+                                  className="order-input"
+                                  type="text"
+                                  value={orderDrafts[order.id]?.payment?.card?.number || ""}
+                                  onChange={(event) =>
+                                    setOrderDrafts((prev) => ({
+                                      ...prev,
+                                      [order.id]: {
+                                        ...prev[order.id],
+                                        payment: {
+                                          ...prev[order.id].payment,
+                                          card: {
+                                            ...prev[order.id].payment.card,
+                                            number: event.target.value,
+                                          },
+                                        },
+                                      },
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="order-kv">
+                                <span className="order-label">Cardholder</span>
+                                <input
+                                  className="order-input"
+                                  type="text"
+                                  value={orderDrafts[order.id]?.payment?.card?.holder || ""}
+                                  onChange={(event) =>
+                                    setOrderDrafts((prev) => ({
+                                      ...prev,
+                                      [order.id]: {
+                                        ...prev[order.id],
+                                        payment: {
+                                          ...prev[order.id].payment,
+                                          card: {
+                                            ...prev[order.id].payment.card,
+                                            holder: event.target.value,
+                                          },
+                                        },
+                                      },
+                                    }))
+                                  }
+                                />
+                              </div>
+                            </>
+                          ) : null}
+
+                          {orderDrafts[order.id]?.payment?.method === "invoice" ? (
+                            <>
+                              <div className="order-kv">
+                                <span className="order-label">PEC</span>
+                                <input
+                                  className="order-input"
+                                  type="email"
+                                  value={orderDrafts[order.id]?.payment?.invoice?.pecEmail || ""}
+                                  onChange={(event) =>
+                                    setOrderDrafts((prev) => ({
+                                      ...prev,
+                                      [order.id]: {
+                                        ...prev[order.id],
+                                        payment: {
+                                          ...prev[order.id].payment,
+                                          invoice: {
+                                            ...prev[order.id].payment.invoice,
+                                            pecEmail: event.target.value,
+                                          },
+                                        },
+                                      },
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="order-kv">
+                                <span className="order-label">SDI</span>
+                                <input
+                                  className="order-input"
+                                  type="text"
+                                  value={orderDrafts[order.id]?.payment?.invoice?.sdiCode || ""}
+                                  onChange={(event) =>
+                                    setOrderDrafts((prev) => ({
+                                      ...prev,
+                                      [order.id]: {
+                                        ...prev[order.id],
+                                        payment: {
+                                          ...prev[order.id].payment,
+                                          invoice: {
+                                            ...prev[order.id].payment.invoice,
+                                            sdiCode: event.target.value,
+                                          },
+                                        },
+                                      },
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="order-kv">
+                                <span className="order-label">VAT</span>
+                                <input
+                                  className="order-input"
+                                  type="text"
+                                  value={orderDrafts[order.id]?.payment?.invoice?.vatNumber || ""}
+                                  onChange={(event) =>
+                                    setOrderDrafts((prev) => ({
+                                      ...prev,
+                                      [order.id]: {
+                                        ...prev[order.id],
+                                        payment: {
+                                          ...prev[order.id].payment,
+                                          invoice: {
+                                            ...prev[order.id].payment.invoice,
+                                            vatNumber: event.target.value,
+                                          },
+                                        },
+                                      },
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="order-kv">
+                                <span className="order-label">Billing contact</span>
+                                <input
+                                  className="order-input"
+                                  type="email"
+                                  value={orderDrafts[order.id]?.payment?.invoice?.billingContact || ""}
+                                  onChange={(event) =>
+                                    setOrderDrafts((prev) => ({
+                                      ...prev,
+                                      [order.id]: {
+                                        ...prev[order.id],
+                                        payment: {
+                                          ...prev[order.id].payment,
+                                          invoice: {
+                                            ...prev[order.id].payment.invoice,
+                                            billingContact: event.target.value,
+                                          },
+                                        },
+                                      },
+                                    }))
+                                  }
+                                />
+                              </div>
+                            </>
+                          ) : null}
                         </>
-                      ) : null}
-                      {order.payment?.invoice ? (
+                      ) : (
                         <>
                           <div className="order-kv">
-                            <span className="order-label">PEC</span>
-                            <span className="order-value">{order.payment.invoice.pecEmail}</span>
+                            <span className="order-label">Method</span>
+                            <span className="order-value">{order.payment?.method}</span>
                           </div>
-                          <div className="order-kv">
-                            <span className="order-label">SDI</span>
-                            <span className="order-value">{order.payment.invoice.sdiCode}</span>
-                          </div>
-                          <div className="order-kv">
-                            <span className="order-label">VAT</span>
-                            <span className="order-value">{order.payment.invoice.vatNumber}</span>
-                          </div>
-                          <div className="order-kv">
-                            <span className="order-label">Billing contact</span>
-                            <span className="order-value">{order.payment.invoice.billingContact}</span>
-                          </div>
+                          {order.payment?.card ? (
+                            <>
+                              <div className="order-kv">
+                                <span className="order-label">Card number</span>
+                                <span className="order-value">{order.payment.card.number}</span>
+                              </div>
+                              <div className="order-kv">
+                                <span className="order-label">Cardholder</span>
+                                <span className="order-value">{order.payment.card.holder}</span>
+                              </div>
+                            </>
+                          ) : null}
+                          {order.payment?.invoice ? (
+                            <>
+                              <div className="order-kv">
+                                <span className="order-label">PEC</span>
+                                <span className="order-value">{order.payment.invoice.pecEmail}</span>
+                              </div>
+                              <div className="order-kv">
+                                <span className="order-label">SDI</span>
+                                <span className="order-value">{order.payment.invoice.sdiCode}</span>
+                              </div>
+                              <div className="order-kv">
+                                <span className="order-label">VAT</span>
+                                <span className="order-value">{order.payment.invoice.vatNumber}</span>
+                              </div>
+                              <div className="order-kv">
+                                <span className="order-label">Billing contact</span>
+                                <span className="order-value">{order.payment.invoice.billingContact}</span>
+                              </div>
+                            </>
+                          ) : null}
                         </>
-                      ) : null}
+                      )}
                     </div>
                   </div>
 
                   <div className="order-items-row">
                     <span className="order-label">Items</span>
-                    <div className="order-items-chips">
-                      {(order.items || []).map((item, idx) => (
-                        <span key={`${order.id}-${idx}`} className="order-chip">
-                          {item}
-                        </span>
-                      ))}
-                    </div>
+                    {editingOrderId === order.id ? (
+                      <textarea
+                        className="order-textarea"
+                        rows="3"
+                        value={orderDrafts[order.id]?.itemsText || ""}
+                        onChange={(event) =>
+                          setOrderDrafts((prev) => ({
+                            ...prev,
+                            [order.id]: {
+                              ...prev[order.id],
+                              itemsText: event.target.value,
+                            },
+                          }))
+                        }
+                      />
+                    ) : (
+                      <div className="order-items-chips">
+                        {(order.items || []).map((item, idx) => (
+                          <span key={`${order.id}-${idx}`} className="order-chip">
+                            {item}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
+
+                  {orderActionStatus[order.id]?.message ? (
+                    <div className={`order-action-status ${orderActionStatus[order.id].status}`}>
+                      {orderActionStatus[order.id].message}
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>

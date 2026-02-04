@@ -156,6 +156,63 @@ const phoneRegex = /^[+]?[\d\s().-]{6,}$/;
 const vatRegex = /^(IT)?\d{11}$/i;
 const sdiRegex = /^[A-Za-z0-9]{7}$/;
 
+function getRolesFromPayload(payload) {
+  if (!payload) return [];
+  const roles = [];
+  Object.entries(payload).forEach(([key, value]) => {
+    if (!key.toLowerCase().includes("roles")) return;
+    if (Array.isArray(value)) {
+      roles.push(...value);
+    }
+  });
+  return roles;
+}
+
+function isAdminPayload(payload) {
+  const roles = getRolesFromPayload(payload);
+  return roles.some((role) => {
+    const normalized = String(role || "").toLowerCase();
+    return normalized === "administrator" || normalized === "administator";
+  });
+}
+
+function validateOrder(order) {
+  const errors = {};
+  const billing = order.billing || {};
+  const payment = order.payment || {};
+
+  if (!billing.fullName) errors.fullName = "Full name is required.";
+  if (!emailRegex.test(billing.email || "")) errors.email = "Valid email is required.";
+  if (!billing.company) errors.company = "Company is required.";
+  if (!phoneRegex.test(billing.phone || "")) errors.phone = "Valid phone is required.";
+  if (!billing.address) errors.address = "Billing address is required.";
+  if (!billing.city) errors.city = "City is required.";
+  if (!billing.country) errors.country = "Country is required.";
+  if (!billing.vat) errors.vat = "VAT / Tax ID is required.";
+
+  if (!PAYMENT_METHODS.has(payment.method)) {
+    errors.paymentMethod = "Invalid payment method.";
+  }
+
+  if (payment.method === "card") {
+    const card = payment.card || {};
+    if (!card.number) errors.cardNumber = "Card number is required.";
+    if (!card.expiry) errors.cardExpiry = "Expiry is required.";
+    if (!card.cvv) errors.cardCvv = "CVV is required.";
+    if (!card.holder) errors.cardHolder = "Cardholder name is required.";
+  }
+
+  if (payment.method === "invoice") {
+    const inv = payment.invoice || {};
+    if (!emailRegex.test(inv.pecEmail || "")) errors.pecEmail = "Valid PEC email is required.";
+    if (!sdiRegex.test(inv.sdiCode || "")) errors.sdiCode = "SDI code must be 7 characters.";
+    if (!vatRegex.test(inv.vatNumber || "")) errors.vatNumber = "Valid VAT number is required.";
+    if (!emailRegex.test(inv.billingContact || "")) errors.billingContact = "Valid billing contact email is required.";
+  }
+
+  return errors;
+}
+
 app.patch("/api/user/profile", checkJwt, async (req, res) => {
   const field = (req.body?.field || "").trim();
   const valueRaw = req.body?.value ?? "";
@@ -217,38 +274,7 @@ app.post("/api/orders", checkJwt, async (req, res) => {
     return res.status(400).json({ message: "Order payload is required." });
   }
 
-  const errors = {};
-  const billing = order.billing || {};
-  const payment = order.payment || {};
-
-  if (!billing.fullName) errors.fullName = "Full name is required.";
-  if (!emailRegex.test(billing.email || "")) errors.email = "Valid email is required.";
-  if (!billing.company) errors.company = "Company is required.";
-  if (!phoneRegex.test(billing.phone || "")) errors.phone = "Valid phone is required.";
-  if (!billing.address) errors.address = "Billing address is required.";
-  if (!billing.city) errors.city = "City is required.";
-  if (!billing.country) errors.country = "Country is required.";
-  if (!billing.vat) errors.vat = "VAT / Tax ID is required.";
-
-  if (!PAYMENT_METHODS.has(payment.method)) {
-    errors.paymentMethod = "Invalid payment method.";
-  }
-
-  if (payment.method === "card") {
-    const card = payment.card || {};
-    if (!card.number) errors.cardNumber = "Card number is required.";
-    if (!card.expiry) errors.cardExpiry = "Expiry is required.";
-    if (!card.cvv) errors.cardCvv = "CVV is required.";
-    if (!card.holder) errors.cardHolder = "Cardholder name is required.";
-  }
-
-  if (payment.method === "invoice") {
-    const inv = payment.invoice || {};
-    if (!emailRegex.test(inv.pecEmail || "")) errors.pecEmail = "Valid PEC email is required.";
-    if (!sdiRegex.test(inv.sdiCode || "")) errors.sdiCode = "SDI code must be 7 characters.";
-    if (!vatRegex.test(inv.vatNumber || "")) errors.vatNumber = "Valid VAT number is required.";
-    if (!emailRegex.test(inv.billingContact || "")) errors.billingContact = "Valid billing contact email is required.";
-  }
+  const errors = validateOrder(order);
 
   if (Object.keys(errors).length > 0) {
     return res.status(400).json({ message: "Validation error.", errors });
@@ -306,6 +332,157 @@ app.post("/api/orders", checkJwt, async (req, res) => {
       message: "Order saved.",
       order: normalizedOrder,
     });
+  } catch (error) {
+    return res.status(500).json({ message: error?.message || "Server error." });
+  }
+});
+
+app.patch("/api/orders/:orderId", checkJwt, async (req, res) => {
+  const userId = req.auth?.payload?.sub;
+  const orderId = req.params.orderId;
+  const order = req.body?.order;
+
+  if (!userId) {
+    return res.status(400).json({ message: "User id not available." });
+  }
+
+  if (!isAdminPayload(req.auth?.payload)) {
+    return res.status(403).json({ message: "Admin role required." });
+  }
+
+  if (!order) {
+    return res.status(400).json({ message: "Order payload is required." });
+  }
+
+  const errors = validateOrder(order);
+  if (Object.keys(errors).length > 0) {
+    return res.status(400).json({ message: "Validation error.", errors });
+  }
+
+  try {
+    const mgmtToken = await getManagementApiToken();
+    const existingResponse = await fetch(
+      `https://${authConfig.domain}/api/v2/users/${encodeURIComponent(userId)}?fields=user_metadata&include_fields=true`,
+      {
+        method: "GET",
+        headers: {
+          authorization: `Bearer ${mgmtToken}`,
+        },
+      }
+    );
+
+    const existingData = await existingResponse.json().catch(() => ({}));
+    if (!existingResponse.ok) {
+      return res.status(existingResponse.status).json({
+        message: existingData?.message || "Error while reading user metadata.",
+      });
+    }
+
+    const existingOrders = existingData?.user_metadata?.orders || [];
+    const existingOrder = existingOrders.find((item) => item.id === orderId);
+    if (!existingOrder) {
+      return res.status(404).json({ message: "Order not found." });
+    }
+
+    const normalizedOrder = {
+      ...order,
+      id: orderId,
+      createdAt: order.createdAt || existingOrder.createdAt || new Date().toISOString(),
+      status: order.status || existingOrder.status || "Paid",
+    };
+
+    const updatedOrders = existingOrders.map((item) =>
+      item.id === orderId ? normalizedOrder : item
+    );
+
+    const response = await fetch(`https://${authConfig.domain}/api/v2/users/${encodeURIComponent(userId)}`, {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${mgmtToken}`,
+      },
+      body: JSON.stringify({
+        user_metadata: {
+          orders: updatedOrders,
+        },
+      }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return res.status(response.status).json({
+        message: data?.message || "Error while updating order.",
+      });
+    }
+
+    return res.json({
+      message: "Order updated.",
+      order: normalizedOrder,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error?.message || "Server error." });
+  }
+});
+
+app.delete("/api/orders/:orderId", checkJwt, async (req, res) => {
+  const userId = req.auth?.payload?.sub;
+  const orderId = req.params.orderId;
+
+  if (!userId) {
+    return res.status(400).json({ message: "User id not available." });
+  }
+
+  if (!isAdminPayload(req.auth?.payload)) {
+    return res.status(403).json({ message: "Admin role required." });
+  }
+
+  try {
+    const mgmtToken = await getManagementApiToken();
+    const existingResponse = await fetch(
+      `https://${authConfig.domain}/api/v2/users/${encodeURIComponent(userId)}?fields=user_metadata&include_fields=true`,
+      {
+        method: "GET",
+        headers: {
+          authorization: `Bearer ${mgmtToken}`,
+        },
+      }
+    );
+
+    const existingData = await existingResponse.json().catch(() => ({}));
+    if (!existingResponse.ok) {
+      return res.status(existingResponse.status).json({
+        message: existingData?.message || "Error while reading user metadata.",
+      });
+    }
+
+    const existingOrders = existingData?.user_metadata?.orders || [];
+    const updatedOrders = existingOrders.filter((item) => item.id !== orderId);
+
+    if (updatedOrders.length === existingOrders.length) {
+      return res.status(404).json({ message: "Order not found." });
+    }
+
+    const response = await fetch(`https://${authConfig.domain}/api/v2/users/${encodeURIComponent(userId)}`, {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${mgmtToken}`,
+      },
+      body: JSON.stringify({
+        user_metadata: {
+          orders: updatedOrders,
+        },
+      }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return res.status(response.status).json({
+        message: data?.message || "Error while deleting order.",
+      });
+    }
+
+    return res.json({ message: "Order deleted." });
   } catch (error) {
     return res.status(500).json({ message: error?.message || "Server error." });
   }

@@ -386,6 +386,35 @@
   gap: 14px;
 }
 
+.order-admin {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.order-admin-btn {
+  border-radius: 999px;
+  padding: 6px 12px;
+  border: 1px solid rgba(15, 29, 18, 0.2);
+  background: white;
+  color: var(--ink);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.order-admin-btn.primary {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: white;
+  box-shadow: 0 8px 16px var(--glow);
+}
+
+.order-admin-btn.danger {
+  border-color: rgba(163, 32, 32, 0.4);
+  color: #a32020;
+  background: rgba(163, 32, 32, 0.08);
+}
+
 .order-header {
   display: flex;
   justify-content: space-between;
@@ -438,6 +467,25 @@
   gap: 4px;
 }
 
+.order-input {
+  border-radius: 10px;
+  border: 1px solid rgba(15, 29, 18, 0.18);
+  padding: 8px 10px;
+  font-size: 0.9rem;
+  background: #fff;
+  width: 100%;
+}
+
+.order-textarea {
+  border-radius: 10px;
+  border: 1px solid rgba(15, 29, 18, 0.18);
+  padding: 8px 10px;
+  font-size: 0.9rem;
+  background: #fff;
+  resize: vertical;
+  width: 100%;
+}
+
 .order-items-row {
   display: grid;
   gap: 8px;
@@ -461,6 +509,18 @@
   color: var(--brand-dark);
   font-weight: 600;
   font-size: 0.8rem;
+}
+
+.order-action-status {
+  font-size: 0.85rem;
+}
+
+.order-action-status.success {
+  color: var(--brand-dark);
+}
+
+.order-action-status.error {
+  color: #a32020;
 }
 
 .order-label {
