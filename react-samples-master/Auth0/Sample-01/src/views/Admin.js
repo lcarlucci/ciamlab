@@ -52,6 +52,35 @@ const AdminComponent = () => {
   const createOrderDraft = (order) => ({
     status: order.status || "Paid",
     itemsText: (order.items || []).join("\n"),
+    totals: {
+      pricePerItem: order.totals?.pricePerItem || 12000,
+      currency: order.totals?.currency || "EUR",
+    },
+    billing: {
+      fullName: order.billing?.fullName || "",
+      email: order.billing?.email || "",
+      company: order.billing?.company || "",
+      phone: order.billing?.phone || "",
+      address: order.billing?.address || "",
+      city: order.billing?.city || "",
+      country: order.billing?.country || "",
+      vat: order.billing?.vat || "",
+    },
+    payment: {
+      method: order.payment?.method || "card",
+      card: {
+        number: order.payment?.card?.number || "",
+        expiry: order.payment?.card?.expiry || "",
+        cvv: order.payment?.card?.cvv || "",
+        holder: order.payment?.card?.holder || "",
+      },
+      invoice: {
+        pecEmail: order.payment?.invoice?.pecEmail || "",
+        sdiCode: order.payment?.invoice?.sdiCode || "",
+        vatNumber: order.payment?.invoice?.vatNumber || "",
+        billingContact: order.payment?.invoice?.billingContact || "",
+      },
+    },
   });
 
   const fetchOverview = async (token) => {
@@ -146,6 +175,7 @@ const AdminComponent = () => {
 
   const handleEditOrder = (order) => {
     setEditingOrderId(order.id);
+    setExpandedOrders((prev) => ({ ...prev, [order.id]: true }));
     setOrderDrafts((prev) => ({
       ...prev,
       [order.id]: prev[order.id] || createOrderDraft(order),
@@ -154,10 +184,21 @@ const AdminComponent = () => {
 
   const handleCancelEdit = (orderId) => {
     setEditingOrderId(null);
+    setExpandedOrders((prev) => ({ ...prev, [orderId]: false }));
     setOrderDrafts((prev) => {
       const next = { ...prev };
       delete next[orderId];
       return next;
+    });
+  };
+
+  const updateOrderDraft = (orderId, updater) => {
+    setOrderDrafts((prev) => {
+      const current = prev[orderId] || createOrderDraft(overview.orders.find((o) => o.id === orderId) || {});
+      return {
+        ...prev,
+        [orderId]: updater(current),
+      };
     });
   };
 
@@ -168,7 +209,8 @@ const AdminComponent = () => {
       .split("\n")
       .map((item) => item.trim())
       .filter(Boolean);
-    const pricePerItem = Number(order.totals?.pricePerItem || 12000);
+    const pricePerItem = Number(draft?.totals?.pricePerItem || 0);
+    const currency = draft?.totals?.currency || "EUR";
 
     const { user, userId, ...orderPayload } = order;
     const updatedOrder = {
@@ -177,9 +219,15 @@ const AdminComponent = () => {
       status: draft.status,
       items,
       totals: {
-        currency: order.totals?.currency || "EUR",
+        currency,
         pricePerItem,
         subtotal: items.length * pricePerItem,
+      },
+      billing: draft.billing,
+      payment: {
+        method: draft.payment?.method || "card",
+        card: draft.payment?.method === "card" ? draft.payment.card : null,
+        invoice: draft.payment?.method === "invoice" ? draft.payment.invoice : null,
       },
     };
 
@@ -340,7 +388,7 @@ const AdminComponent = () => {
       </section>
 
       <div className="admin-grid">
-        <section className="admin-card admin-orders-panel">
+        <section className="admin-card admin-people-panel">
           <h2>People</h2>
           <div className="admin-users">
             <button
@@ -385,7 +433,7 @@ const AdminComponent = () => {
           </div>
         </section>
 
-        <section className="admin-card admin-people-panel">
+        <section className="admin-card admin-orders-panel">
           <h2 className="admin-orders-title">Orders</h2>
           <div className="admin-orders-header">
             <span className="admin-orders-subtitle">
@@ -405,6 +453,7 @@ const AdminComponent = () => {
             {filteredOrders.map((order) => {
               const isExpanded = !!expandedOrders[order.id];
               const isEditing = editingOrderId === order.id;
+              const draft = orderDrafts[order.id] || createOrderDraft(order);
 
               return (
               <div
@@ -502,36 +551,359 @@ const AdminComponent = () => {
 
                 {isEditing ? (
                   <div className="admin-order-edit">
-                    <div className="admin-edit-field">
-                      <label>Status</label>
-                      <input
-                        className="admin-input"
-                        type="text"
-                        value={orderDrafts[order.id]?.status || ""}
-                        onChange={(event) =>
-                          setOrderDrafts((prev) => ({
-                            ...prev,
-                            [order.id]: {
-                              ...prev[order.id],
-                              status: event.target.value,
-                            },
-                          }))
-                        }
-                      />
+                    <div className="admin-edit-section">
+                      <h4>Order</h4>
+                      <div className="admin-edit-grid">
+                        <div className="admin-edit-field">
+                          <label>Status</label>
+                          <input
+                            className="admin-input"
+                            type="text"
+                            value={draft.status || ""}
+                            onChange={(event) =>
+                              updateOrderDraft(order.id, (current) => ({
+                                ...current,
+                                status: event.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="admin-edit-field">
+                          <label>Price per item</label>
+                          <input
+                            className="admin-input"
+                            type="number"
+                            value={draft.totals?.pricePerItem || ""}
+                            onChange={(event) =>
+                              updateOrderDraft(order.id, (current) => ({
+                                ...current,
+                                totals: {
+                                  ...current.totals,
+                                  pricePerItem: Number(event.target.value || 0),
+                                },
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="admin-edit-field">
+                          <label>Currency</label>
+                          <input
+                            className="admin-input"
+                            type="text"
+                            value={draft.totals?.currency || ""}
+                            onChange={(event) =>
+                              updateOrderDraft(order.id, (current) => ({
+                                ...current,
+                                totals: {
+                                  ...current.totals,
+                                  currency: event.target.value,
+                                },
+                              }))
+                            }
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <div className="admin-edit-field">
-                      <label>Items (one per line)</label>
+
+                    <div className="admin-edit-section">
+                      <h4>Billing</h4>
+                      <div className="admin-edit-grid">
+                        <div className="admin-edit-field">
+                          <label>Full name</label>
+                          <input
+                            className="admin-input"
+                            type="text"
+                            value={draft.billing?.fullName || ""}
+                            onChange={(event) =>
+                              updateOrderDraft(order.id, (current) => ({
+                                ...current,
+                                billing: { ...current.billing, fullName: event.target.value },
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="admin-edit-field">
+                          <label>Email</label>
+                          <input
+                            className="admin-input"
+                            type="email"
+                            value={draft.billing?.email || ""}
+                            onChange={(event) =>
+                              updateOrderDraft(order.id, (current) => ({
+                                ...current,
+                                billing: { ...current.billing, email: event.target.value },
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="admin-edit-field">
+                          <label>Company</label>
+                          <input
+                            className="admin-input"
+                            type="text"
+                            value={draft.billing?.company || ""}
+                            onChange={(event) =>
+                              updateOrderDraft(order.id, (current) => ({
+                                ...current,
+                                billing: { ...current.billing, company: event.target.value },
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="admin-edit-field">
+                          <label>Phone</label>
+                          <input
+                            className="admin-input"
+                            type="tel"
+                            value={draft.billing?.phone || ""}
+                            onChange={(event) =>
+                              updateOrderDraft(order.id, (current) => ({
+                                ...current,
+                                billing: { ...current.billing, phone: event.target.value },
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="admin-edit-field">
+                          <label>Address</label>
+                          <input
+                            className="admin-input"
+                            type="text"
+                            value={draft.billing?.address || ""}
+                            onChange={(event) =>
+                              updateOrderDraft(order.id, (current) => ({
+                                ...current,
+                                billing: { ...current.billing, address: event.target.value },
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="admin-edit-field">
+                          <label>City</label>
+                          <input
+                            className="admin-input"
+                            type="text"
+                            value={draft.billing?.city || ""}
+                            onChange={(event) =>
+                              updateOrderDraft(order.id, (current) => ({
+                                ...current,
+                                billing: { ...current.billing, city: event.target.value },
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="admin-edit-field">
+                          <label>Country</label>
+                          <input
+                            className="admin-input"
+                            type="text"
+                            value={draft.billing?.country || ""}
+                            onChange={(event) =>
+                              updateOrderDraft(order.id, (current) => ({
+                                ...current,
+                                billing: { ...current.billing, country: event.target.value },
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="admin-edit-field">
+                          <label>VAT / Tax ID</label>
+                          <input
+                            className="admin-input"
+                            type="text"
+                            value={draft.billing?.vat || ""}
+                            onChange={(event) =>
+                              updateOrderDraft(order.id, (current) => ({
+                                ...current,
+                                billing: { ...current.billing, vat: event.target.value },
+                              }))
+                            }
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="admin-edit-section">
+                      <h4>Payment</h4>
+                      <div className="admin-edit-grid">
+                        <div className="admin-edit-field">
+                          <label>Method</label>
+                          <select
+                            className="admin-input"
+                            value={draft.payment?.method || "card"}
+                            onChange={(event) =>
+                              updateOrderDraft(order.id, (current) => ({
+                                ...current,
+                                payment: { ...current.payment, method: event.target.value },
+                              }))
+                            }
+                          >
+                            <option value="card">Card</option>
+                            <option value="paypal">PayPal</option>
+                            <option value="gpay">Google Pay</option>
+                            <option value="applepay">Apple Pay</option>
+                            <option value="invoice">Invoice</option>
+                          </select>
+                        </div>
+
+                        {draft.payment?.method === "card" ? (
+                          <>
+                            <div className="admin-edit-field">
+                              <label>Card number</label>
+                              <input
+                                className="admin-input"
+                                type="text"
+                                value={draft.payment?.card?.number || ""}
+                                onChange={(event) =>
+                                  updateOrderDraft(order.id, (current) => ({
+                                    ...current,
+                                    payment: {
+                                      ...current.payment,
+                                      card: { ...current.payment.card, number: event.target.value },
+                                    },
+                                  }))
+                                }
+                              />
+                            </div>
+                            <div className="admin-edit-field">
+                              <label>Expiry</label>
+                              <input
+                                className="admin-input"
+                                type="text"
+                                value={draft.payment?.card?.expiry || ""}
+                                onChange={(event) =>
+                                  updateOrderDraft(order.id, (current) => ({
+                                    ...current,
+                                    payment: {
+                                      ...current.payment,
+                                      card: { ...current.payment.card, expiry: event.target.value },
+                                    },
+                                  }))
+                                }
+                              />
+                            </div>
+                            <div className="admin-edit-field">
+                              <label>CVV</label>
+                              <input
+                                className="admin-input"
+                                type="text"
+                                value={draft.payment?.card?.cvv || ""}
+                                onChange={(event) =>
+                                  updateOrderDraft(order.id, (current) => ({
+                                    ...current,
+                                    payment: {
+                                      ...current.payment,
+                                      card: { ...current.payment.card, cvv: event.target.value },
+                                    },
+                                  }))
+                                }
+                              />
+                            </div>
+                            <div className="admin-edit-field">
+                              <label>Cardholder</label>
+                              <input
+                                className="admin-input"
+                                type="text"
+                                value={draft.payment?.card?.holder || ""}
+                                onChange={(event) =>
+                                  updateOrderDraft(order.id, (current) => ({
+                                    ...current,
+                                    payment: {
+                                      ...current.payment,
+                                      card: { ...current.payment.card, holder: event.target.value },
+                                    },
+                                  }))
+                                }
+                              />
+                            </div>
+                          </>
+                        ) : null}
+
+                        {draft.payment?.method === "invoice" ? (
+                          <>
+                            <div className="admin-edit-field">
+                              <label>PEC email</label>
+                              <input
+                                className="admin-input"
+                                type="email"
+                                value={draft.payment?.invoice?.pecEmail || ""}
+                                onChange={(event) =>
+                                  updateOrderDraft(order.id, (current) => ({
+                                    ...current,
+                                    payment: {
+                                      ...current.payment,
+                                      invoice: { ...current.payment.invoice, pecEmail: event.target.value },
+                                    },
+                                  }))
+                                }
+                              />
+                            </div>
+                            <div className="admin-edit-field">
+                              <label>SDI code</label>
+                              <input
+                                className="admin-input"
+                                type="text"
+                                value={draft.payment?.invoice?.sdiCode || ""}
+                                onChange={(event) =>
+                                  updateOrderDraft(order.id, (current) => ({
+                                    ...current,
+                                    payment: {
+                                      ...current.payment,
+                                      invoice: { ...current.payment.invoice, sdiCode: event.target.value },
+                                    },
+                                  }))
+                                }
+                              />
+                            </div>
+                            <div className="admin-edit-field">
+                              <label>VAT number</label>
+                              <input
+                                className="admin-input"
+                                type="text"
+                                value={draft.payment?.invoice?.vatNumber || ""}
+                                onChange={(event) =>
+                                  updateOrderDraft(order.id, (current) => ({
+                                    ...current,
+                                    payment: {
+                                      ...current.payment,
+                                      invoice: { ...current.payment.invoice, vatNumber: event.target.value },
+                                    },
+                                  }))
+                                }
+                              />
+                            </div>
+                            <div className="admin-edit-field">
+                              <label>Billing contact</label>
+                              <input
+                                className="admin-input"
+                                type="email"
+                                value={draft.payment?.invoice?.billingContact || ""}
+                                onChange={(event) =>
+                                  updateOrderDraft(order.id, (current) => ({
+                                    ...current,
+                                    payment: {
+                                      ...current.payment,
+                                      invoice: { ...current.payment.invoice, billingContact: event.target.value },
+                                    },
+                                  }))
+                                }
+                              />
+                            </div>
+                          </>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="admin-edit-section full">
+                      <h4>Items</h4>
                       <textarea
                         className="admin-textarea"
-                        rows="3"
-                        value={orderDrafts[order.id]?.itemsText || ""}
+                        rows="4"
+                        value={draft.itemsText || ""}
                         onChange={(event) =>
-                          setOrderDrafts((prev) => ({
-                            ...prev,
-                            [order.id]: {
-                              ...prev[order.id],
-                              itemsText: event.target.value,
-                            },
+                          updateOrderDraft(order.id, (current) => ({
+                            ...current,
+                            itemsText: event.target.value,
                           }))
                         }
                       />

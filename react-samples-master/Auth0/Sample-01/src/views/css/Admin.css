@@ -122,12 +122,15 @@
   display: grid;
   grid-template-rows: 32px 44px minmax(0, 1fr);
   min-height: 720px;
+  height: 100%;
 }
 
 .admin-people-panel {
   display: grid;
   grid-template-rows: 32px minmax(0, 1fr);
   min-height: 720px;
+  overflow: hidden;
+  height: 100%;
 }
 
 .admin-card h2 {
@@ -141,6 +144,7 @@
   max-height: none;
   overflow-y: auto;
   padding-right: 6px;
+  height: 100%;
 }
 
 .admin-user-card {
@@ -442,24 +446,44 @@
   border: 1px dashed rgba(134, 188, 37, 0.35);
   padding: 14px;
   display: grid;
-  grid-template-columns: minmax(160px, 220px) minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
   background: #ffffff;
-  max-height: 320px;
+  max-height: 520px;
   overflow: auto;
+}
+
+.admin-order-card.editing .admin-order-edit {
+  padding: 16px;
+}
+
+.admin-edit-section {
+  display: grid;
+  gap: 10px;
+  background: #ffffff;
+  border: 1px solid rgba(15, 29, 18, 0.08);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.admin-edit-section h4 {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.admin-edit-section.full {
+  grid-column: 1 / -1;
+}
+
+.admin-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .admin-edit-field {
   display: grid;
   gap: 6px;
-}
-
-.admin-order-edit .admin-edit-field:last-child {
-  grid-column: 2 / -1;
-}
-
-.admin-order-card.editing .admin-order-edit {
-  padding: 16px;
 }
 
 .admin-edit-field label {
@@ -518,8 +542,8 @@
     grid-template-columns: 1fr;
   }
 
-  .admin-order-edit .admin-edit-field:last-child {
-    grid-column: 1 / -1;
+  .admin-edit-grid {
+    grid-template-columns: 1fr;
   }
 }
 
