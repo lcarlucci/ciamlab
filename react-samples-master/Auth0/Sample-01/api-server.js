@@ -60,8 +60,14 @@ app.use(
 app.use(cors({ origin: appOrigin }));
 
 // Middleware per autenticazione JWT
-const checkJwt = auth({
+const checkApiJwt = auth({
   audience: authConfig.audience,
+  issuerBaseURL: `https://${authConfig.domain}/`,
+  algorithms: ["RS256"],
+});
+
+const checkMfaJwt = auth({
+  audience: `https://${authConfig.domain}/mfa/`,
   issuerBaseURL: `https://${authConfig.domain}/`,
   algorithms: ["RS256"],
 });
@@ -95,7 +101,7 @@ async function getManagementApiToken() {
   return data.access_token;
 }
 
-app.patch("/api/user/phone", checkJwt, async (req, res) => {
+app.patch("/api/user/phone", checkApiJwt, async (req, res) => {
   const phoneNumber = (req.body?.phoneNumber || "").trim();
   const userId = req.auth?.payload?.sub;
 
@@ -233,7 +239,7 @@ function validateOrder(order) {
   return errors;
 }
 
-app.patch("/api/user/profile", checkJwt, async (req, res) => {
+app.patch("/api/user/profile", checkApiJwt, async (req, res) => {
   const field = (req.body?.field || "").trim();
   const valueRaw = req.body?.value ?? "";
   const userId = req.auth?.payload?.sub;
@@ -282,7 +288,7 @@ app.patch("/api/user/profile", checkJwt, async (req, res) => {
   }
 });
 
-app.post("/api/orders", checkJwt, async (req, res) => {
+app.post("/api/orders", checkApiJwt, async (req, res) => {
   const userId = req.auth?.payload?.sub;
   const order = req.body?.order;
 
@@ -357,7 +363,7 @@ app.post("/api/orders", checkJwt, async (req, res) => {
   }
 });
 
-app.patch("/api/orders/:orderId", checkJwt, async (req, res) => {
+app.patch("/api/orders/:orderId", checkApiJwt, async (req, res) => {
   const userId = req.auth?.payload?.sub;
   const orderId = req.params.orderId;
   const order = req.body?.order;
@@ -445,7 +451,7 @@ app.patch("/api/orders/:orderId", checkJwt, async (req, res) => {
   }
 });
 
-app.delete("/api/orders/:orderId", checkJwt, async (req, res) => {
+app.delete("/api/orders/:orderId", checkApiJwt, async (req, res) => {
   const userId = req.auth?.payload?.sub;
   const orderId = req.params.orderId;
 
@@ -510,7 +516,7 @@ app.delete("/api/orders/:orderId", checkJwt, async (req, res) => {
   }
 });
 
-app.get("/api/user/profile", checkJwt, async (req, res) => {
+app.get("/api/user/profile", checkApiJwt, async (req, res) => {
   const userId = req.auth?.payload?.sub;
 
   if (!userId) {
@@ -545,7 +551,7 @@ app.get("/api/user/profile", checkJwt, async (req, res) => {
   }
 });
 
-app.get("/api/user/roles", checkJwt, async (req, res) => {
+app.get("/api/user/roles", checkApiJwt, async (req, res) => {
   const userId = req.auth?.payload?.sub;
 
   if (!userId) {
@@ -579,7 +585,7 @@ app.get("/api/user/roles", checkJwt, async (req, res) => {
   }
 });
 
-app.get("/api/admin/overview", checkJwt, async (req, res) => {
+app.get("/api/admin/overview", checkApiJwt, async (req, res) => {
   const userId = req.auth?.payload?.sub;
 
   if (!userId) {
@@ -652,7 +658,7 @@ app.get("/api/admin/overview", checkJwt, async (req, res) => {
   }
 });
 
-app.post("/api/mfa/enroll-sms", checkJwt, async (req, res) => {
+app.post("/api/mfa/enroll-sms", checkMfaJwt, async (req, res) => {
   const userId = req.auth?.payload?.sub;
   const phoneNumber = (req.body?.phoneNumber || "").trim();
   const mfaToken = req.body?.mfaToken;
@@ -714,7 +720,7 @@ app.post("/api/mfa/enroll-sms", checkJwt, async (req, res) => {
   }
 });
 
-app.post("/api/mfa/verify-sms", checkJwt, async (req, res) => {
+app.post("/api/mfa/verify-sms", checkMfaJwt, async (req, res) => {
   const userId = req.auth?.payload?.sub;
   const mfaToken = req.body?.mfaToken;
   const oobCode = req.body?.oobCode;
@@ -775,13 +781,13 @@ app.post("/api/mfa/verify-sms", checkJwt, async (req, res) => {
 });
 
 // API protetta
-app.get("/api/external", checkJwt, (req, res) => {
+app.get("/api/external", checkApiJwt, (req, res) => {
   res.send({
     msg: "Your access token was successfully validated!"
   });
 });
 
-app.patch("/api/admin/orders/:orderId", checkJwt, async (req, res) => {
+app.patch("/api/admin/orders/:orderId", checkApiJwt, async (req, res) => {
   const adminUserId = req.auth?.payload?.sub;
   const orderId = req.params.orderId;
   const targetUserId = req.body?.userId || req.query?.userId;
@@ -874,7 +880,7 @@ app.patch("/api/admin/orders/:orderId", checkJwt, async (req, res) => {
   }
 });
 
-app.delete("/api/admin/orders/:orderId", checkJwt, async (req, res) => {
+app.delete("/api/admin/orders/:orderId", checkApiJwt, async (req, res) => {
   const adminUserId = req.auth?.payload?.sub;
   const orderId = req.params.orderId;
   const targetUserId = req.body?.userId || req.query?.userId;
@@ -953,3 +959,4 @@ app.get("*", (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
+
