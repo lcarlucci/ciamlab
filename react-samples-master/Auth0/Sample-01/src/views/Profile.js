@@ -24,9 +24,25 @@ export const ProfileComponent = () => {
     message: "",
     mfaToken: "",
     oobCode: "",
+    authenticatorId: "",
     otp: "",
   });
   const config = getConfig();
+
+  const buildErrorMessage = (data, fallback) => {
+    const base = data?.message || fallback;
+    const details = data?.details || {};
+    const parts = [];
+    if (details.error_description) {
+      parts.push(details.error_description);
+    } else if (details.error) {
+      parts.push(details.error);
+    }
+    if (details.requestId) {
+      parts.push(`requestId: ${details.requestId}`);
+    }
+    return parts.length ? `${base} (${parts.join(" | ")})` : base;
+  };
 
   const decodeJwtPayload = (token) => {
     if (!token) return null;
@@ -282,7 +298,14 @@ export const ProfileComponent = () => {
     setFieldValues((prev) => ({ ...prev, [fieldKey]: fallbackValue }));
     setEditingField(null);
     if (fieldKey === "phone_number") {
-      setPhoneFlow({ status: "idle", message: "", mfaToken: "", oobCode: "", otp: "" });
+      setPhoneFlow({
+        status: "idle",
+        message: "",
+        mfaToken: "",
+        oobCode: "",
+        authenticatorId: "",
+        otp: "",
+      });
     }
   };
 
@@ -305,11 +328,17 @@ export const ProfileComponent = () => {
       let mfaToken = "";
       try {
         mfaToken = await getAccessTokenSilently({
-          authorizationParams: { audience: `https://${config.domain}/mfa/`, scope: "enroll" },
+          authorizationParams: {
+            audience: `https://${config.domain}/mfa/`,
+            scope: "enroll read:authenticators remove:authenticators",
+          },
         });
       } catch {
         mfaToken = await getAccessTokenWithPopup({
-          authorizationParams: { audience: `https://${config.domain}/mfa/`, scope: "enroll" },
+          authorizationParams: {
+            audience: `https://${config.domain}/mfa/`,
+            scope: "enroll read:authenticators remove:authenticators",
+          },
         });
       }
 
@@ -325,7 +354,7 @@ export const ProfileComponent = () => {
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data?.message || "Unable to send OTP.");
+        throw new Error(buildErrorMessage(data, "Unable to send OTP."));
       }
 
       setPhoneFlow({
@@ -333,6 +362,7 @@ export const ProfileComponent = () => {
         message: "OTP sent to your phone.",
         mfaToken,
         oobCode: data?.oobCode || "",
+        authenticatorId: data?.authenticatorId || "",
         otp: "",
       });
     } catch (err) {
@@ -368,6 +398,7 @@ export const ProfileComponent = () => {
         body: JSON.stringify({
           mfaToken: phoneFlow.mfaToken,
           oobCode: phoneFlow.oobCode,
+          authenticatorId: phoneFlow.authenticatorId,
           otp,
           phoneNumber: (fieldValues.phone_number || "").trim(),
         }),
@@ -375,7 +406,7 @@ export const ProfileComponent = () => {
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data?.message || "OTP verification failed.");
+        throw new Error(buildErrorMessage(data, "OTP verification failed."));
       }
 
       setPhoneFlow((prev) => ({

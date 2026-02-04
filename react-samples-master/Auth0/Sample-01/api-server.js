@@ -664,6 +664,7 @@ app.post("/api/mfa/enroll-sms", checkMfaJwt, async (req, res) => {
   const phoneNumber = phoneNumberRaw.replace(/[^\d+]/g, "");
   const mfaToken = req.body?.mfaToken;
   const replaceExisting = req.body?.replaceExisting !== false;
+  const allowRemoveOld = req.body?.allowRemoveOld !== false;
 
   if (!userId) {
     return res.status(400).json({ message: "User id not available." });
@@ -716,16 +717,33 @@ app.post("/api/mfa/enroll-sms", checkMfaJwt, async (req, res) => {
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
+      const requestId =
+        response.headers.get("x-auth0-requestid") ||
+        response.headers.get("x-request-id") ||
+        response.headers.get("x-amzn-requestid");
+      console.error("MFA enroll failed", {
+        status: response.status,
+        error: data?.error,
+        error_description: data?.error_description,
+        requestId,
+      });
       return res.status(response.status).json({
         message:
           data?.error_description ||
           data?.message ||
           data?.error ||
           "Unable to enroll phone number.",
+        details: {
+          status: response.status,
+          error: data?.error,
+          error_description: data?.error_description,
+          requestId,
+        },
       });
     }
 
-    return res.json({ oobCode: data?.oob_code });
+    const authenticatorId = data?.authenticator_id || data?.authenticatorId || "";
+    return res.json({ oobCode: data?.oob_code, authenticatorId, allowRemoveOld });
   } catch (error) {
     return res.status(500).json({ message: error?.message || "Server error." });
   }
@@ -737,6 +755,7 @@ app.post("/api/mfa/verify-sms", checkMfaJwt, async (req, res) => {
   const oobCode = req.body?.oobCode;
   const bindingCode = (req.body?.otp || "").trim();
   const phoneNumber = (req.body?.phoneNumber || "").trim();
+  const authenticatorId = req.body?.authenticatorId;
 
   if (!userId) {
     return res.status(400).json({ message: "User id not available." });
@@ -765,14 +784,32 @@ app.post("/api/mfa/verify-sms", checkMfaJwt, async (req, res) => {
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
+      const requestId =
+        response.headers.get("x-auth0-requestid") ||
+        response.headers.get("x-request-id") ||
+        response.headers.get("x-amzn-requestid");
+      console.error("MFA verify failed", {
+        status: response.status,
+        error: data?.error,
+        error_description: data?.error_description,
+        requestId,
+      });
       return res.status(response.status).json({
         message: data?.error_description || data?.message || "OTP verification failed.",
+        details: {
+          status: response.status,
+          error: data?.error,
+          error_description: data?.error_description,
+          requestId,
+        },
       });
     }
 
     if (phoneNumber) {
       const mgmtToken = await getManagementApiToken();
-      await fetch(`https://${authConfig.domain}/api/v2/users/${encodeURIComponent(userId)}`, {
+      const updateResponse = await fetch(
+        `https://${authConfig.domain}/api/v2/users/${encodeURIComponent(userId)}`,
+        {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
@@ -782,7 +819,73 @@ app.post("/api/mfa/verify-sms", checkMfaJwt, async (req, res) => {
           phone_number: phoneNumber,
           phone_verified: true,
         }),
-      });
+        }
+      );
+
+      const updateData = await updateResponse.json().catch(() => ({}));
+      if (!updateResponse.ok) {
+        const requestId =
+          updateResponse.headers.get("x-auth0-requestid") ||
+          updateResponse.headers.get("x-request-id") ||
+          updateResponse.headers.get("x-amzn-requestid");
+        console.error("Phone update failed", {
+          status: updateResponse.status,
+          error: updateData?.error,
+          message: updateData?.message,
+          requestId,
+        });
+        return res.status(updateResponse.status).json({
+          message:
+            updateData?.message ||
+            updateData?.error ||
+            "Unable to update verified phone number.",
+          details: {
+            status: updateResponse.status,
+            error: updateData?.error,
+            error_description: updateData?.error_description,
+            requestId,
+          },
+        });
+      }
+    }
+
+    if (mfaToken && authenticatorId) {
+      try {
+        const listResponse = await fetch(`https://${authConfig.domain}/mfa/authenticators`, {
+          headers: {
+            authorization: `Bearer ${mfaToken}`,
+          },
+        });
+
+        const listData = await listResponse.json().catch(() => []);
+        if (listResponse.ok && Array.isArray(listData)) {
+          const smsAuthenticators = listData.filter((authenticator) => {
+            if (!authenticator) return false;
+            if (authenticatorId && authenticator.id === authenticatorId) return false;
+            const channel = String(authenticator.oob_channel || "").toLowerCase();
+            const type = String(authenticator.authenticator_type || authenticator.type || "").toLowerCase();
+            return channel === "sms" || type === "sms" || type === "oob";
+          });
+
+          await Promise.all(
+            smsAuthenticators.map((authenticator) =>
+              fetch(
+                `https://${authConfig.domain}/mfa/authenticators/${encodeURIComponent(
+                  authenticator.id
+                )}`,
+                {
+                  method: "DELETE",
+                  headers: {
+                    authorization: `Bearer ${mfaToken}`,
+                  },
+                }
+              ).catch(() => null)
+            )
+          );
+        }
+      } catch {
+        // Best effort: do not block verification if cleanup fails.
+      }
     }
 
     return res.json({ message: "Phone number verified." });
