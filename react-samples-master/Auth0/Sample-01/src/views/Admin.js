@@ -14,6 +14,7 @@ const AdminComponent = () => {
   const [orderDrafts, setOrderDrafts] = useState({});
   const [orderActionStatus, setOrderActionStatus] = useState({});
   const [selectedUserId, setSelectedUserId] = useState("all");
+  const [expandedOrders, setExpandedOrders] = useState({});
 
   const fallbackAvatar =
     "data:image/svg+xml;utf8," +
@@ -133,7 +134,15 @@ const AdminComponent = () => {
 
   useEffect(() => {
     setEditingOrderId(null);
+    setExpandedOrders({});
   }, [selectedUserId]);
+
+  const toggleExpanded = (orderId) => {
+    setExpandedOrders((prev) => ({
+      ...prev,
+      [orderId]: !prev[orderId],
+    }));
+  };
 
   const handleEditOrder = (order) => {
     setEditingOrderId(order.id);
@@ -377,15 +386,13 @@ const AdminComponent = () => {
         </section>
 
         <section className="admin-card">
+          <h2 className="admin-orders-title">Orders</h2>
           <div className="admin-orders-header">
-            <div>
-              <h2>Orders</h2>
-              <span className="admin-orders-subtitle">
-                {selectedUserId === "all"
-                  ? "All customers"
-                  : selectedUser?.name || "Selected customer"}
-              </span>
-            </div>
+            <span className="admin-orders-subtitle">
+              {selectedUserId === "all"
+                ? "All customers"
+                : selectedUser?.name || "Selected customer"}
+            </span>
             <div className="admin-orders-meta">
               <span>{filteredOrders.length} orders</span>
               {selectedUser?.email ? <span>{selectedUser.email}</span> : null}
@@ -395,8 +402,20 @@ const AdminComponent = () => {
             {filteredOrders.length === 0 ? (
               <div className="admin-orders-empty">No orders for this customer.</div>
             ) : null}
-            {filteredOrders.map((order) => (
-              <div key={`${order.id}-${order.user?.id}`} className="admin-order-card">
+            {filteredOrders.map((order) => {
+              const isExpanded = !!expandedOrders[order.id];
+              const isEditing = editingOrderId === order.id;
+
+              return (
+              <div
+                key={`${order.id}-${order.user?.id}`}
+                className={`admin-order-card ${isExpanded ? "expanded" : ""} ${isEditing ? "editing" : ""} ${!isEditing ? "clickable" : ""}`}
+                onClick={() => {
+                  if (!isEditing) {
+                    toggleExpanded(order.id);
+                  }
+                }}
+              >
                 <div className="admin-order-header">
                   <div>
                     <div className="admin-order-id">Order {order.id}</div>
@@ -406,19 +425,25 @@ const AdminComponent = () => {
                   </div>
                   <div className="admin-order-actions">
                     <span className="admin-order-status">{order.status || "Paid"}</span>
-                    {editingOrderId === order.id ? (
+                    {isEditing ? (
                       <>
                         <button
                           className="admin-action-btn primary"
                           type="button"
-                          onClick={() => handleSaveOrder(order)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleSaveOrder(order);
+                          }}
                         >
                           Save
                         </button>
                         <button
                           className="admin-action-btn"
                           type="button"
-                          onClick={() => handleCancelEdit(order.id)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleCancelEdit(order.id);
+                          }}
                         >
                           Cancel
                         </button>
@@ -428,14 +453,20 @@ const AdminComponent = () => {
                         <button
                           className="admin-action-btn"
                           type="button"
-                          onClick={() => handleEditOrder(order)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleEditOrder(order);
+                          }}
                         >
                           Edit
                         </button>
                         <button
                           className="admin-action-btn danger"
                           type="button"
-                          onClick={() => handleDeleteOrder(order)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleDeleteOrder(order);
+                          }}
                         >
                           Delete
                         </button>
@@ -443,22 +474,23 @@ const AdminComponent = () => {
                     )}
                   </div>
                 </div>
-                <div className="admin-order-body">
-                  <div className="admin-order-kv">
+
+                <div className="admin-order-summary">
+                  <div className="admin-summary-item">
                     <span className="admin-label">Items</span>
                     <span>{(order.items || []).length}</span>
                   </div>
-                  <div className="admin-order-kv">
+                  <div className="admin-summary-item">
                     <span className="admin-label">Subtotal</span>
                     <span>
                       {order.totals?.currency || "EUR"} {order.totals?.subtotal}
                     </span>
                   </div>
-                  <div className="admin-order-kv">
+                  <div className="admin-summary-item">
                     <span className="admin-label">Payment</span>
                     <span>{order.payment?.method || "n/a"}</span>
                   </div>
-                  <div className="admin-order-kv">
+                  <div className="admin-summary-item">
                     <span className="admin-label">Date</span>
                     <span>
                       {order.createdAt
@@ -467,7 +499,8 @@ const AdminComponent = () => {
                     </span>
                   </div>
                 </div>
-                {editingOrderId === order.id ? (
+
+                {isEditing ? (
                   <div className="admin-order-edit">
                     <div className="admin-edit-field">
                       <label>Status</label>
@@ -504,27 +537,102 @@ const AdminComponent = () => {
                       />
                     </div>
                   </div>
-                ) : (
-                  <div className="admin-order-items">
-                    {(order.items || []).slice(0, 4).map((item, idx) => (
-                      <span key={`${order.id}-${idx}`} className="admin-order-chip">
-                        {item}
-                      </span>
-                    ))}
-                    {(order.items || []).length > 4 ? (
-                      <span className="admin-order-chip muted">
-                        +{(order.items || []).length - 4} more
-                      </span>
-                    ) : null}
-                  </div>
-                )}
+                ) : null}
+
+                {isExpanded && !isEditing ? (
+                  <>
+                    <div className="admin-order-details">
+                      <div className="admin-details-block">
+                        <h4>Billing</h4>
+                        <div className="admin-details-grid">
+                          <div>
+                            <span className="admin-label">Full name</span>
+                            <span>{order.billing?.fullName || "n/a"}</span>
+                          </div>
+                          <div>
+                            <span className="admin-label">Email</span>
+                            <span>{order.billing?.email || "n/a"}</span>
+                          </div>
+                          <div>
+                            <span className="admin-label">Company</span>
+                            <span>{order.billing?.company || "n/a"}</span>
+                          </div>
+                          <div>
+                            <span className="admin-label">Phone</span>
+                            <span>{order.billing?.phone || "n/a"}</span>
+                          </div>
+                          <div>
+                            <span className="admin-label">Address</span>
+                            <span>
+                              {order.billing?.address || "n/a"},{" "}
+                              {order.billing?.city || "n/a"},{" "}
+                              {order.billing?.country || "n/a"}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="admin-label">VAT / Tax ID</span>
+                            <span>{order.billing?.vat || "n/a"}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="admin-details-block">
+                        <h4>Payment</h4>
+                        <div className="admin-details-grid">
+                          <div>
+                            <span className="admin-label">Method</span>
+                            <span>{order.payment?.method || "n/a"}</span>
+                          </div>
+                          {order.payment?.card ? (
+                            <>
+                              <div>
+                                <span className="admin-label">Card number</span>
+                                <span>{order.payment.card.number || "n/a"}</span>
+                              </div>
+                              <div>
+                                <span className="admin-label">Cardholder</span>
+                                <span>{order.payment.card.holder || "n/a"}</span>
+                              </div>
+                            </>
+                          ) : null}
+                          {order.payment?.invoice ? (
+                            <>
+                              <div>
+                                <span className="admin-label">PEC</span>
+                                <span>{order.payment.invoice.pecEmail || "n/a"}</span>
+                              </div>
+                              <div>
+                                <span className="admin-label">SDI</span>
+                                <span>{order.payment.invoice.sdiCode || "n/a"}</span>
+                              </div>
+                              <div>
+                                <span className="admin-label">VAT</span>
+                                <span>{order.payment.invoice.vatNumber || "n/a"}</span>
+                              </div>
+                              <div>
+                                <span className="admin-label">Billing contact</span>
+                                <span>{order.payment.invoice.billingContact || "n/a"}</span>
+                              </div>
+                            </>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="admin-order-items">
+                      {(order.items || []).map((item, idx) => (
+                        <span key={`${order.id}-${idx}`} className="admin-order-chip">
+                          {item}
+                        </span>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
                 {orderActionStatus[order.id]?.message ? (
                   <div className={`admin-action-status ${orderActionStatus[order.id].status}`}>
                     {orderActionStatus[order.id].message}
                   </div>
                 ) : null}
               </div>
-            ))}
+            )})}
           </div>
         </section>
       </div>
