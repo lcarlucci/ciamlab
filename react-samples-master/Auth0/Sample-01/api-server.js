@@ -579,11 +579,247 @@ app.get("/api/user/roles", checkJwt, async (req, res) => {
   }
 });
 
+app.get("/api/admin/overview", checkJwt, async (req, res) => {
+  const userId = req.auth?.payload?.sub;
+
+  if (!userId) {
+    return res.status(400).json({ message: "User id not available." });
+  }
+
+  const isAdmin = isAdminPayload(req.auth?.payload) || (await hasAdminRoleForUser(userId));
+  if (!isAdmin) {
+    return res.status(403).json({ message: "Admin role required." });
+  }
+
+  try {
+    const mgmtToken = await getManagementApiToken();
+    const response = await fetch(
+      `https://${authConfig.domain}/api/v2/users?fields=user_id,name,email,picture,user_metadata&include_fields=true&per_page=50&page=0`,
+      {
+        method: "GET",
+        headers: {
+          authorization: `Bearer ${mgmtToken}`,
+        },
+      }
+    );
+
+    const data = await response.json().catch(() => ([]));
+    if (!response.ok) {
+      return res.status(response.status).json({
+        message: data?.message || "Error while fetching users.",
+      });
+    }
+
+    const users = Array.isArray(data)
+      ? data.map((user) => ({
+          id: user.user_id,
+          name: user.name || "",
+          email: user.email || "",
+          picture: user.picture || "",
+          metadata: user.user_metadata || {},
+          orders: user.user_metadata?.orders || [],
+        }))
+      : [];
+
+    const orders = users.flatMap((user) =>
+      (user.orders || []).map((order) => ({
+        ...order,
+        userId: user.id,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          picture: user.picture,
+        },
+      }))
+    );
+
+    orders.sort((a, b) => {
+      const aTime = new Date(a.createdAt || 0).getTime();
+      const bTime = new Date(b.createdAt || 0).getTime();
+      return bTime - aTime;
+    });
+
+    const totals = {
+      users: users.length,
+      orders: orders.length,
+      revenue: orders.reduce((sum, order) => sum + Number(order.totals?.subtotal || 0), 0),
+    };
+
+    return res.json({ totals, users, orders });
+  } catch (error) {
+    return res.status(500).json({ message: error?.message || "Server error." });
+  }
+});
+
 // API protetta
 app.get("/api/external", checkJwt, (req, res) => {
   res.send({
     msg: "Your access token was successfully validated!"
   });
+});
+
+app.patch("/api/admin/orders/:orderId", checkJwt, async (req, res) => {
+  const adminUserId = req.auth?.payload?.sub;
+  const orderId = req.params.orderId;
+  const targetUserId = req.body?.userId || req.query?.userId;
+  const order = req.body?.order;
+
+  if (!adminUserId) {
+    return res.status(400).json({ message: "User id not available." });
+  }
+
+  const isAdmin = isAdminPayload(req.auth?.payload) || (await hasAdminRoleForUser(adminUserId));
+  if (!isAdmin) {
+    return res.status(403).json({ message: "Admin role required." });
+  }
+
+  if (!targetUserId) {
+    return res.status(400).json({ message: "Target user id is required." });
+  }
+
+  if (!order) {
+    return res.status(400).json({ message: "Order payload is required." });
+  }
+
+  const errors = validateOrder(order);
+  if (Object.keys(errors).length > 0) {
+    return res.status(400).json({ message: "Validation error.", errors });
+  }
+
+  try {
+    const mgmtToken = await getManagementApiToken();
+    const existingResponse = await fetch(
+      `https://${authConfig.domain}/api/v2/users/${encodeURIComponent(targetUserId)}?fields=user_metadata&include_fields=true`,
+      {
+        method: "GET",
+        headers: {
+          authorization: `Bearer ${mgmtToken}`,
+        },
+      }
+    );
+
+    const existingData = await existingResponse.json().catch(() => ({}));
+    if (!existingResponse.ok) {
+      return res.status(existingResponse.status).json({
+        message: existingData?.message || "Error while reading user metadata.",
+      });
+    }
+
+    const existingOrders = existingData?.user_metadata?.orders || [];
+    const existingOrder = existingOrders.find((item) => item.id === orderId);
+    if (!existingOrder) {
+      return res.status(404).json({ message: "Order not found." });
+    }
+
+    const normalizedOrder = {
+      ...order,
+      id: orderId,
+      createdAt: order.createdAt || existingOrder.createdAt || new Date().toISOString(),
+      status: order.status || existingOrder.status || "Paid",
+    };
+
+    const updatedOrders = existingOrders.map((item) =>
+      item.id === orderId ? normalizedOrder : item
+    );
+
+    const response = await fetch(`https://${authConfig.domain}/api/v2/users/${encodeURIComponent(targetUserId)}`, {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${mgmtToken}`,
+      },
+      body: JSON.stringify({
+        user_metadata: {
+          orders: updatedOrders,
+        },
+      }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return res.status(response.status).json({
+        message: data?.message || "Error while updating order.",
+      });
+    }
+
+    return res.json({
+      message: "Order updated.",
+      order: normalizedOrder,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error?.message || "Server error." });
+  }
+});
+
+app.delete("/api/admin/orders/:orderId", checkJwt, async (req, res) => {
+  const adminUserId = req.auth?.payload?.sub;
+  const orderId = req.params.orderId;
+  const targetUserId = req.body?.userId || req.query?.userId;
+
+  if (!adminUserId) {
+    return res.status(400).json({ message: "User id not available." });
+  }
+
+  const isAdmin = isAdminPayload(req.auth?.payload) || (await hasAdminRoleForUser(adminUserId));
+  if (!isAdmin) {
+    return res.status(403).json({ message: "Admin role required." });
+  }
+
+  if (!targetUserId) {
+    return res.status(400).json({ message: "Target user id is required." });
+  }
+
+  try {
+    const mgmtToken = await getManagementApiToken();
+    const existingResponse = await fetch(
+      `https://${authConfig.domain}/api/v2/users/${encodeURIComponent(targetUserId)}?fields=user_metadata&include_fields=true`,
+      {
+        method: "GET",
+        headers: {
+          authorization: `Bearer ${mgmtToken}`,
+        },
+      }
+    );
+
+    const existingData = await existingResponse.json().catch(() => ({}));
+    if (!existingResponse.ok) {
+      return res.status(existingResponse.status).json({
+        message: existingData?.message || "Error while reading user metadata.",
+      });
+    }
+
+    const existingOrders = existingData?.user_metadata?.orders || [];
+    const updatedOrders = existingOrders.filter((item) => item.id !== orderId);
+
+    if (updatedOrders.length === existingOrders.length) {
+      return res.status(404).json({ message: "Order not found." });
+    }
+
+    const response = await fetch(`https://${authConfig.domain}/api/v2/users/${encodeURIComponent(targetUserId)}`, {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${mgmtToken}`,
+      },
+      body: JSON.stringify({
+        user_metadata: {
+          orders: updatedOrders,
+        },
+      }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return res.status(response.status).json({
+        message: data?.message || "Error while deleting order.",
+      });
+    }
+
+    return res.json({ message: "Order deleted." });
+  } catch (error) {
+    return res.status(500).json({ message: error?.message || "Server error." });
+  }
 });
 
 // Serve i file statici di React

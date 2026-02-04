@@ -1,11 +1,14 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import { useNavigate } from "react-router-dom";
 import styles from "./style/NavBar.module.css";
+import { getConfig } from "../config";
 
 const Navbar = () => {
-  const { user, loginWithRedirect, logout, isAuthenticated } = useAuth0();
+  const { user, loginWithRedirect, logout, isAuthenticated, getAccessTokenSilently } = useAuth0();
   const navigate = useNavigate();
+  const config = getConfig();
+  const [isAdmin, setIsAdmin] = useState(false);
   const fallbackAvatar =
     "data:image/svg+xml;utf8," +
     encodeURIComponent(
@@ -19,6 +22,68 @@ const Navbar = () => {
         "<path d='M24 102c8-22 26-34 36-34s28 12 36 34' fill='white'/>" +
       "</svg>"
     );
+
+  const hasAdminRole = (roles) =>
+    roles.some((role) => {
+      const normalized = String(role || "").toLowerCase();
+      return normalized === "administrator" || normalized === "administator";
+    });
+
+  const decodeJwtPayload = (token) => {
+    if (!token) return null;
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = payload.padEnd(Math.ceil(payload.length / 4) * 4, "=");
+    try {
+      return JSON.parse(atob(padded));
+    } catch {
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setIsAdmin(false);
+      return;
+    }
+
+    const loadRoles = async () => {
+      try {
+        const token = await getAccessTokenSilently({
+          authorizationParams: { audience: config.audience },
+        });
+        const payload = decodeJwtPayload(token);
+        const tokenRoles = [];
+        if (payload) {
+          Object.entries(payload).forEach(([key, value]) => {
+            if (!key.toLowerCase().includes("roles")) return;
+            if (Array.isArray(value)) tokenRoles.push(...value);
+          });
+        }
+
+        if (hasAdminRole(tokenRoles)) {
+          setIsAdmin(true);
+          return;
+        }
+
+        const apiBase = config.apiOrigin || window.location.origin;
+        const response = await fetch(`${apiBase}/api/user/roles`, {
+          headers: { authorization: `Bearer ${token}` },
+        });
+        const data = await response.json().catch(() => ({}));
+        if (response.ok && Array.isArray(data.roles)) {
+          setIsAdmin(hasAdminRole(data.roles));
+        } else {
+          setIsAdmin(false);
+        }
+      } catch {
+        setIsAdmin(false);
+      }
+    };
+
+    loadRoles();
+  }, [isAuthenticated, getAccessTokenSilently, config.audience, config.apiOrigin]);
 
   return (
     <header className={styles.header}>
@@ -49,6 +114,14 @@ const Navbar = () => {
             >
               Home
             </button>
+          {isAdmin ? (
+            <button
+              className={styles.apibtn}
+              onClick={() => navigate("/admin")}
+            >
+              Admin
+            </button>
+          ) : null}
           <button
               className={styles.apibtn}
               onClick={() => navigate("/api")}
