@@ -259,6 +259,15 @@
   gap: 8px;
 }
 
+.field-otp {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px dashed rgba(15, 29, 18, 0.18);
+  background: #ffffff;
+}
+
 .field-input {
   max-width: 360px;
   padding: 10px 12px;

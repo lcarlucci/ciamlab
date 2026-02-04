@@ -652,6 +652,128 @@ app.get("/api/admin/overview", checkJwt, async (req, res) => {
   }
 });
 
+app.post("/api/mfa/enroll-sms", checkJwt, async (req, res) => {
+  const userId = req.auth?.payload?.sub;
+  const phoneNumber = (req.body?.phoneNumber || "").trim();
+  const mfaToken = req.body?.mfaToken;
+  const replaceExisting = req.body?.replaceExisting !== false;
+
+  if (!userId) {
+    return res.status(400).json({ message: "User id not available." });
+  }
+
+  if (!phoneNumber) {
+    return res.status(400).json({ message: "Phone number is required." });
+  }
+
+  if (!mfaToken) {
+    return res.status(400).json({ message: "MFA token is required." });
+  }
+
+  try {
+    if (replaceExisting) {
+      try {
+        const mgmtToken = await getManagementApiToken();
+        await fetch(
+          `https://${authConfig.domain}/api/v2/users/${encodeURIComponent(userId)}/multifactor/sms`,
+          {
+            method: "DELETE",
+            headers: {
+              authorization: `Bearer ${mgmtToken}`,
+            },
+          }
+        );
+      } catch {
+        // Best effort: continue even if no existing SMS factor
+      }
+    }
+
+    const response = await fetch(`https://${authConfig.domain}/mfa/associate`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${mfaToken}`,
+      },
+      body: JSON.stringify({
+        authenticator_types: ["oob"],
+        oob_channels: ["sms"],
+        phone_number: phoneNumber,
+      }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return res.status(response.status).json({
+        message: data?.message || "Unable to enroll phone number.",
+      });
+    }
+
+    return res.json({ oobCode: data?.oob_code });
+  } catch (error) {
+    return res.status(500).json({ message: error?.message || "Server error." });
+  }
+});
+
+app.post("/api/mfa/verify-sms", checkJwt, async (req, res) => {
+  const userId = req.auth?.payload?.sub;
+  const mfaToken = req.body?.mfaToken;
+  const oobCode = req.body?.oobCode;
+  const bindingCode = (req.body?.otp || "").trim();
+  const phoneNumber = (req.body?.phoneNumber || "").trim();
+
+  if (!userId) {
+    return res.status(400).json({ message: "User id not available." });
+  }
+
+  if (!mfaToken || !oobCode || !bindingCode) {
+    return res.status(400).json({ message: "OTP data is required." });
+  }
+
+  try {
+    const params = new URLSearchParams();
+    params.set("grant_type", "http://auth0.com/oauth/grant-type/mfa-oob");
+    params.set("client_id", authConfig.clientId);
+    if (process.env.AUTH0_CLIENT_SECRET) {
+      params.set("client_secret", process.env.AUTH0_CLIENT_SECRET);
+    }
+    params.set("mfa_token", mfaToken);
+    params.set("oob_code", oobCode);
+    params.set("binding_code", bindingCode);
+
+    const response = await fetch(`https://${authConfig.domain}/oauth/token`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return res.status(response.status).json({
+        message: data?.error_description || data?.message || "OTP verification failed.",
+      });
+    }
+
+    if (phoneNumber) {
+      const mgmtToken = await getManagementApiToken();
+      await fetch(`https://${authConfig.domain}/api/v2/users/${encodeURIComponent(userId)}`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${mgmtToken}`,
+        },
+        body: JSON.stringify({
+          phone_number: phoneNumber,
+          phone_verified: true,
+        }),
+      });
+    }
+
+    return res.json({ message: "Phone number verified." });
+  } catch (error) {
+    return res.status(500).json({ message: error?.message || "Server error." });
+  }
+});
+
 // API protetta
 app.get("/api/external", checkJwt, (req, res) => {
   res.send({

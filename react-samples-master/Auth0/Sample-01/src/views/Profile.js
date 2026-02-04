@@ -9,7 +9,7 @@ const DEBUG_BYPASS_AUTH = false;
 const PASSWORD_RESET_CONNECTION = "Username-Password-Authentication";
 
 export const ProfileComponent = () => {
-  const { user, getAccessTokenSilently } = useAuth0();
+  const { user, getAccessTokenSilently, getAccessTokenWithPopup } = useAuth0();
   const [resetState, setResetState] = useState({ status: "idle", message: "" });
   const [editingField, setEditingField] = useState(null);
   const [fieldValues, setFieldValues] = useState({});
@@ -19,6 +19,13 @@ export const ProfileComponent = () => {
   const [editingOrderId, setEditingOrderId] = useState(null);
   const [orderDrafts, setOrderDrafts] = useState({});
   const [orderActionStatus, setOrderActionStatus] = useState({});
+  const [phoneFlow, setPhoneFlow] = useState({
+    status: "idle",
+    message: "",
+    mfaToken: "",
+    oobCode: "",
+    otp: "",
+  });
   const config = getConfig();
 
   const decodeJwtPayload = (token) => {
@@ -102,7 +109,11 @@ export const ProfileComponent = () => {
     editableFields.forEach((field) => {
       const metaValue = currentUser?.user_metadata?.[field.key];
       const rootValue = currentUser?.[field.key];
-      nextValues[field.key] = metaValue ?? rootValue ?? "";
+      if (field.key === "phone_number") {
+        nextValues[field.key] = rootValue ?? metaValue ?? "";
+      } else {
+        nextValues[field.key] = metaValue ?? rootValue ?? "";
+      }
     });
     setFieldValues(nextValues);
   }, [currentUser, editableFields]);
@@ -136,6 +147,9 @@ export const ProfileComponent = () => {
         setFieldValues((prev) => {
           const next = { ...prev };
           editableFields.forEach((field) => {
+            if (field.key === "phone_number") {
+              return;
+            }
             if (metadata[field.key] !== undefined && metadata[field.key] !== null) {
               next[field.key] = metadata[field.key];
             }
@@ -267,6 +281,116 @@ export const ProfileComponent = () => {
     const fallbackValue = metaValue ?? rootValue ?? "";
     setFieldValues((prev) => ({ ...prev, [fieldKey]: fallbackValue }));
     setEditingField(null);
+    if (fieldKey === "phone_number") {
+      setPhoneFlow({ status: "idle", message: "", mfaToken: "", oobCode: "", otp: "" });
+    }
+  };
+
+  const startPhoneVerification = async () => {
+    const phoneNumber = (fieldValues.phone_number || "").trim();
+    if (!phoneNumber) {
+      setPhoneFlow({
+        status: "error",
+        message: "Phone number is required.",
+        mfaToken: "",
+        oobCode: "",
+        otp: "",
+      });
+      return;
+    }
+
+    setPhoneFlow((prev) => ({ ...prev, status: "loading", message: "" }));
+
+    try {
+      let mfaToken = "";
+      try {
+        mfaToken = await getAccessTokenSilently({
+          authorizationParams: { audience: `https://${config.domain}/mfa/`, scope: "enroll" },
+        });
+      } catch {
+        mfaToken = await getAccessTokenWithPopup({
+          authorizationParams: { audience: `https://${config.domain}/mfa/`, scope: "enroll" },
+        });
+      }
+
+      const apiBase = config.apiOrigin || window.location.origin;
+      const response = await fetch(`${apiBase}/api/mfa/enroll-sms`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${mfaToken}`,
+        },
+        body: JSON.stringify({ phoneNumber, mfaToken, replaceExisting: true }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.message || "Unable to send OTP.");
+      }
+
+      setPhoneFlow({
+        status: "code_sent",
+        message: "OTP sent to your phone.",
+        mfaToken,
+        oobCode: data?.oobCode || "",
+        otp: "",
+      });
+    } catch (err) {
+      setPhoneFlow((prev) => ({
+        ...prev,
+        status: "error",
+        message: err?.message || "Unable to send OTP.",
+      }));
+    }
+  };
+
+  const verifyPhoneOtp = async () => {
+    const otp = (phoneFlow.otp || "").trim();
+    if (!otp) {
+      setPhoneFlow((prev) => ({
+        ...prev,
+        status: "error",
+        message: "OTP code is required.",
+      }));
+      return;
+    }
+
+    setPhoneFlow((prev) => ({ ...prev, status: "verifying", message: "" }));
+
+    try {
+      const apiBase = config.apiOrigin || window.location.origin;
+      const response = await fetch(`${apiBase}/api/mfa/verify-sms`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${phoneFlow.mfaToken}`,
+        },
+        body: JSON.stringify({
+          mfaToken: phoneFlow.mfaToken,
+          oobCode: phoneFlow.oobCode,
+          otp,
+          phoneNumber: (fieldValues.phone_number || "").trim(),
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.message || "OTP verification failed.");
+      }
+
+      setPhoneFlow((prev) => ({
+        ...prev,
+        status: "success",
+        message: "Phone number verified.",
+      }));
+      setEditingField(null);
+    } catch (err) {
+      setPhoneFlow((prev) => ({
+        ...prev,
+        status: "error",
+        message: err?.message || "OTP verification failed.",
+      }));
+    }
   };
 
   const createOrderDraft = (order) => ({
@@ -531,23 +655,84 @@ export const ProfileComponent = () => {
                               }))
                             }
                           />
-                          <div className="field-edit-actions">
-                            <button
-                              className="field-save-button"
-                              onClick={() => handleFieldSave(field.key)}
-                              disabled={status?.status === "loading"}
-                              type="button"
-                            >
-                              {status?.status === "loading" ? "Saving..." : "Save"}
-                            </button>
-                            <button
-                              className="field-cancel-button"
-                              onClick={() => handleCancelEdit(field.key)}
-                              type="button"
-                            >
-                              Cancel
-                            </button>
-                          </div>
+                          {field.key === "phone_number" ? (
+                            <>
+                              <div className="field-edit-actions">
+                                <button
+                                  className="field-save-button"
+                                  onClick={startPhoneVerification}
+                                  disabled={phoneFlow.status === "loading"}
+                                  type="button"
+                                >
+                                  {phoneFlow.status === "loading"
+                                    ? "Sending..."
+                                    : phoneFlow.status === "code_sent"
+                                      ? "Resend OTP"
+                                      : "Send OTP"}
+                                </button>
+                                <button
+                                  className="field-cancel-button"
+                                  onClick={() => handleCancelEdit(field.key)}
+                                  type="button"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                              {phoneFlow.status === "code_sent" ||
+                              phoneFlow.status === "verifying" ||
+                              phoneFlow.status === "success" ||
+                              phoneFlow.status === "error" ? (
+                                <div className="field-otp">
+                                  <label>OTP code</label>
+                                  <input
+                                    className="field-input"
+                                    type="text"
+                                    value={phoneFlow.otp}
+                                    placeholder="123456"
+                                    onChange={(event) =>
+                                      setPhoneFlow((prev) => ({
+                                        ...prev,
+                                        otp: event.target.value,
+                                      }))
+                                    }
+                                  />
+                                  <div className="field-edit-actions">
+                                    <button
+                                      className="field-save-button"
+                                      onClick={verifyPhoneOtp}
+                                      disabled={phoneFlow.status === "verifying"}
+                                      type="button"
+                                    >
+                                      {phoneFlow.status === "verifying" ? "Verifying..." : "Verify"}
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : null}
+                              {phoneFlow.message ? (
+                                <div className={`field-status ${phoneFlow.status}`}>
+                                  {phoneFlow.message}
+                                </div>
+                              ) : null}
+                            </>
+                          ) : (
+                            <div className="field-edit-actions">
+                              <button
+                                className="field-save-button"
+                                onClick={() => handleFieldSave(field.key)}
+                                disabled={status?.status === "loading"}
+                                type="button"
+                              >
+                                {status?.status === "loading" ? "Saving..." : "Save"}
+                              </button>
+                              <button
+                                className="field-cancel-button"
+                                onClick={() => handleCancelEdit(field.key)}
+                                type="button"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          )}
                         </div>
                       ) : null}
 
