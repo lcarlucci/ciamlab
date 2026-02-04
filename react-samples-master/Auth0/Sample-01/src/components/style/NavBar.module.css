@@ -40,11 +40,23 @@
   font-weight: bold;
 }
 
-.userPic {
+.userAvatar {
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.userAvatarCircle {
   width: 45px;
   height: 45px;
   border-radius: 50%;
-  object-fit: cover;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 1rem;
+  box-shadow: 0 6px 12px rgba(15, 29, 18, 0.2);
 }
 
 .logoutBtn {

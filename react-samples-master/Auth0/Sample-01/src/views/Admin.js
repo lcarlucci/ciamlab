@@ -3,6 +3,7 @@ import { useAuth0, withAuthenticationRequired } from "@auth0/auth0-react";
 import Loading from "../components/Loading";
 import { getConfig } from "../config";
 import "./css/Admin.css";
+import { getAvatarColor, getInitial } from "../utils/avatar";
 
 const AdminComponent = () => {
   const { getAccessTokenSilently } = useAuth0();
@@ -15,20 +16,6 @@ const AdminComponent = () => {
   const [orderActionStatus, setOrderActionStatus] = useState({});
   const [selectedUserId, setSelectedUserId] = useState("all");
   const [expandedOrders, setExpandedOrders] = useState({});
-
-  const fallbackAvatar =
-    "data:image/svg+xml;utf8," +
-    encodeURIComponent(
-      "<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'>" +
-        "<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>" +
-        "<stop offset='0%' stop-color='#dff5a1'/>" +
-        "<stop offset='100%' stop-color='#86bc25'/>" +
-        "</linearGradient></defs>" +
-        "<rect width='120' height='120' rx='30' fill='url(#g)'/>" +
-        "<circle cx='60' cy='46' r='22' fill='white'/>" +
-        "<path d='M24 102c8-22 26-34 36-34s28 12 36 34' fill='white'/>" +
-      "</svg>"
-    );
 
   const decodeJwtPayload = (token) => {
     if (!token) return null;
@@ -415,11 +402,13 @@ const AdminComponent = () => {
                 onClick={() => setSelectedUserId(user.id)}
                 aria-pressed={selectedUserId === user.id}
               >
-                <img
-                  src={user.picture || fallbackAvatar}
-                  alt="User avatar"
+                <div
                   className="admin-user-avatar"
-                />
+                  style={{ backgroundColor: getAvatarColor(user.name || user.email || "") }}
+                  aria-label="User avatar"
+                >
+                  {getInitial(user.name, user.email)}
+                </div>
                 <div>
                   <div className="admin-user-name">{user.name || "Unnamed user"}</div>
                   <div className="admin-user-email">{user.email || "No email"}</div>

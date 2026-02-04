@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useAuth0, withAuthenticationRequired } from "@auth0/auth0-react";
 import Loading from "../components/Loading";
 import { getConfig } from "../config";
+import { getAvatarColor, getInitial } from "../utils/avatar";
 import "./css/Profile.css";
 
 const DEBUG_BYPASS_AUTH = false;
@@ -19,19 +20,9 @@ export const ProfileComponent = () => {
   const [orderDrafts, setOrderDrafts] = useState({});
   const [orderActionStatus, setOrderActionStatus] = useState({});
   const config = getConfig();
-  const fallbackAvatar =
-    "data:image/svg+xml;utf8," +
-    encodeURIComponent(
-      "<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'>" +
-        "<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>" +
-        "<stop offset='0%' stop-color='#dff5a1'/>" +
-        "<stop offset='100%' stop-color='#86bc25'/>" +
-        "</linearGradient></defs>" +
-        "<rect width='180' height='180' rx='40' fill='url(#g)'/>" +
-        "<circle cx='90' cy='66' r='32' fill='white'/>" +
-        "<path d='M38 152c12-30 36-46 52-46s40 16 52 46' fill='white'/>" +
-      "</svg>"
-    );
+  const avatarSeed = currentUser?.name || currentUser?.email || "";
+  const avatarInitial = getInitial(currentUser?.name, currentUser?.email);
+  const avatarColor = getAvatarColor(avatarSeed);
 
   const decodeJwtPayload = (token) => {
     if (!token) return null;
@@ -446,11 +437,13 @@ export const ProfileComponent = () => {
     <div className="profile-container">
       <section className="profile-shell">
         <aside className="profile-card">
-          <img
-            src={currentUser?.picture || fallbackAvatar}
-            alt="Profile"
-            className="profile-picture"
-          />
+          <div
+            className="profile-avatar"
+            style={{ backgroundColor: avatarColor }}
+            aria-label="Profile avatar"
+          >
+            {avatarInitial}
+          </div>
           <h2 className="profile-name">{currentUser?.name || "User"}</h2>
           <p className="profile-email">{currentUser?.email || "Email not available"}</p>
           <div className="profile-actions">

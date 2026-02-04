@@ -186,7 +186,11 @@
   width: 46px;
   height: 46px;
   border-radius: 14px;
-  object-fit: cover;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 1rem;
   border: 2px solid rgba(134, 188, 37, 0.3);
 }
 

@@ -3,25 +3,16 @@ import { useAuth0 } from "@auth0/auth0-react";
 import { useNavigate } from "react-router-dom";
 import styles from "./style/NavBar.module.css";
 import { getConfig } from "../config";
+import { getAvatarColor, getInitial } from "../utils/avatar";
 
 const Navbar = () => {
   const { user, loginWithRedirect, logout, isAuthenticated, getAccessTokenSilently } = useAuth0();
   const navigate = useNavigate();
   const config = getConfig();
   const [isAdmin, setIsAdmin] = useState(false);
-  const fallbackAvatar =
-    "data:image/svg+xml;utf8," +
-    encodeURIComponent(
-      "<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'>" +
-        "<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>" +
-        "<stop offset='0%' stop-color='#dff5a1'/>" +
-        "<stop offset='100%' stop-color='#86bc25'/>" +
-        "</linearGradient></defs>" +
-        "<rect width='120' height='120' rx='30' fill='url(#g)'/>" +
-        "<circle cx='60' cy='46' r='22' fill='white'/>" +
-        "<path d='M24 102c8-22 26-34 36-34s28 12 36 34' fill='white'/>" +
-      "</svg>"
-    );
+  const avatarSeed = user?.name || user?.email || "";
+  const avatarInitial = getInitial(user?.name, user?.email);
+  const avatarColor = getAvatarColor(avatarSeed);
 
   const hasAdminRole = (roles) =>
     roles.some((role) => {
@@ -135,13 +126,19 @@ const Navbar = () => {
             >
               {user.name}
             </span>
-            <img
-              className={styles.userPic}
-              src={user.picture || fallbackAvatar}
-              alt="Profile"
+            <button
+              className={styles.userAvatar}
+              type="button"
               onClick={() => navigate("/profile")}
-              style={{ cursor: "pointer" }}
-            />
+              aria-label="Open profile"
+            >
+              <span
+                className={styles.userAvatarCircle}
+                style={{ backgroundColor: avatarColor }}
+              >
+                {avatarInitial}
+              </span>
+            </button>
             <button
               className={styles.logoutBtn}
               onClick={() => logout({ returnTo: window.location.origin })}
