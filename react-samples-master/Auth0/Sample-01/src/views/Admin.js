@@ -340,7 +340,7 @@ const AdminComponent = () => {
       </section>
 
       <div className="admin-grid">
-        <section className="admin-card">
+        <section className="admin-card admin-orders-panel">
           <h2>People</h2>
           <div className="admin-users">
             <button
