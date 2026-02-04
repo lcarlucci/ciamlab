@@ -504,14 +504,20 @@ const AdminComponent = () => {
                       />
                     </div>
                   </div>
-                ) : null}
-                <div className="admin-order-items">
-                  {(order.items || []).map((item, idx) => (
-                    <span key={`${order.id}-${idx}`} className="admin-order-chip">
-                      {item}
-                    </span>
-                  ))}
-                </div>
+                ) : (
+                  <div className="admin-order-items">
+                    {(order.items || []).slice(0, 4).map((item, idx) => (
+                      <span key={`${order.id}-${idx}`} className="admin-order-chip">
+                        {item}
+                      </span>
+                    ))}
+                    {(order.items || []).length > 4 ? (
+                      <span className="admin-order-chip muted">
+                        +{(order.items || []).length - 4} more
+                      </span>
+                    ) : null}
+                  </div>
+                )}
                 {orderActionStatus[order.id]?.message ? (
                   <div className={`admin-action-status ${orderActionStatus[order.id].status}`}>
                     {orderActionStatus[order.id].message}

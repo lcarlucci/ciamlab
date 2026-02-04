@@ -129,10 +129,10 @@
 
 .admin-user-card {
   display: grid;
-  grid-template-columns: 54px minmax(0, 1fr) auto;
-  gap: 12px;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+  gap: 10px;
   align-items: center;
-  padding: 12px;
+  padding: 10px;
   border-radius: 14px;
   background: var(--surface-soft);
   border: 1px solid rgba(15, 29, 18, 0.08);
@@ -163,9 +163,9 @@
 }
 
 .admin-user-avatar {
-  width: 54px;
-  height: 54px;
-  border-radius: 16px;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
   object-fit: cover;
   border: 2px solid rgba(134, 188, 37, 0.3);
 }
@@ -191,10 +191,10 @@
 
 .admin-user-meta {
   text-align: right;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   color: var(--ink-muted);
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
 
 .admin-orders {
@@ -202,6 +202,9 @@
   gap: 16px;
   padding-top: 6px;
   min-height: 180px;
+  max-height: 640px;
+  overflow-y: auto;
+  padding-right: 6px;
 }
 
 .admin-orders-header {
@@ -244,6 +247,9 @@
   display: grid;
   gap: 14px;
   box-shadow: 0 10px 20px rgba(15, 29, 18, 0.06);
+  min-height: 0;
+  max-height: 240px;
+  overflow: hidden;
 }
 
 .admin-order-header {
@@ -337,6 +343,12 @@
   font-size: 0.8rem;
 }
 
+.admin-order-chip.muted {
+  background: rgba(15, 29, 18, 0.08);
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+
 .admin-order-edit {
   border-radius: 14px;
   border: 1px dashed rgba(134, 188, 37, 0.35);
@@ -344,6 +356,8 @@
   display: grid;
   gap: 10px;
   background: #ffffff;
+  max-height: 150px;
+  overflow: auto;
 }
 
 .admin-edit-field {
