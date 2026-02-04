@@ -20,9 +20,6 @@ export const ProfileComponent = () => {
   const [orderDrafts, setOrderDrafts] = useState({});
   const [orderActionStatus, setOrderActionStatus] = useState({});
   const config = getConfig();
-  const avatarSeed = currentUser?.name || currentUser?.email || "";
-  const avatarInitial = getInitial(currentUser?.name, currentUser?.email);
-  const avatarColor = getAvatarColor(avatarSeed);
 
   const decodeJwtPayload = (token) => {
     if (!token) return null;
@@ -68,6 +65,9 @@ export const ProfileComponent = () => {
   const email = currentUser?.email;
   const provider = currentUser?.sub?.split("|")[0];
   const isDbUser = provider === "auth0";
+  const avatarSeed = currentUser?.name || currentUser?.email || "";
+  const avatarInitial = getInitial(currentUser?.name, currentUser?.email);
+  const avatarColor = getAvatarColor(avatarSeed);
 
   const editableFields = useMemo(
     () => [
