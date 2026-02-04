@@ -13,6 +13,7 @@ const AdminComponent = () => {
   const [editingOrderId, setEditingOrderId] = useState(null);
   const [orderDrafts, setOrderDrafts] = useState({});
   const [orderActionStatus, setOrderActionStatus] = useState({});
+  const [selectedUserId, setSelectedUserId] = useState("all");
 
   const fallbackAvatar =
     "data:image/svg+xml;utf8," +
@@ -119,6 +120,20 @@ const AdminComponent = () => {
       mounted = false;
     };
   }, [getAccessTokenSilently, config.audience, config.apiOrigin]);
+
+  const filteredOrders =
+    selectedUserId === "all"
+      ? overview.orders
+      : overview.orders.filter((order) => order.userId === selectedUserId);
+
+  const selectedUser =
+    selectedUserId === "all"
+      ? null
+      : overview.users.find((user) => user.id === selectedUserId);
+
+  useEffect(() => {
+    setEditingOrderId(null);
+  }, [selectedUserId]);
 
   const handleEditOrder = (order) => {
     setEditingOrderId(order.id);
@@ -309,7 +324,7 @@ const AdminComponent = () => {
         <div className="admin-stat-card">
           <span className="stat-label">Revenue</span>
           <span className="stat-value">
-            €{Number(overview.totals?.revenue || 0).toLocaleString("it-IT")}
+            EUR {Number(overview.totals?.revenue || 0).toLocaleString("it-IT")}
           </span>
           <span className="stat-meta">Gross, simulated</span>
         </div>
@@ -319,8 +334,30 @@ const AdminComponent = () => {
         <section className="admin-card">
           <h2>People</h2>
           <div className="admin-users">
+            <button
+              type="button"
+              className={`admin-user-card ${selectedUserId === "all" ? "active" : ""}`}
+              onClick={() => setSelectedUserId("all")}
+              aria-pressed={selectedUserId === "all"}
+            >
+              <div className="admin-user-avatar all">ALL</div>
+              <div>
+                <div className="admin-user-name">All customers</div>
+                <div className="admin-user-email">Show every order</div>
+              </div>
+              <div className="admin-user-meta">
+                <span>{overview.orders.length} orders</span>
+                <span>{overview.users.length} users</span>
+              </div>
+            </button>
             {overview.users.map((user) => (
-              <div key={user.id} className="admin-user-card">
+              <button
+                key={user.id}
+                type="button"
+                className={`admin-user-card ${selectedUserId === user.id ? "active" : ""}`}
+                onClick={() => setSelectedUserId(user.id)}
+                aria-pressed={selectedUserId === user.id}
+              >
                 <img
                   src={user.picture || fallbackAvatar}
                   alt="User avatar"
@@ -334,21 +371,37 @@ const AdminComponent = () => {
                   <span>{(user.orders || []).length} orders</span>
                   <span>{user.metadata?.company || "No company"}</span>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </section>
 
         <section className="admin-card">
-          <h2>Orders</h2>
+          <div className="admin-orders-header">
+            <div>
+              <h2>Orders</h2>
+              <span className="admin-orders-subtitle">
+                {selectedUserId === "all"
+                  ? "All customers"
+                  : selectedUser?.name || "Selected customer"}
+              </span>
+            </div>
+            <div className="admin-orders-meta">
+              <span>{filteredOrders.length} orders</span>
+              {selectedUser?.email ? <span>{selectedUser.email}</span> : null}
+            </div>
+          </div>
           <div className="admin-orders">
-            {overview.orders.map((order) => (
+            {filteredOrders.length === 0 ? (
+              <div className="admin-orders-empty">No orders for this customer.</div>
+            ) : null}
+            {filteredOrders.map((order) => (
               <div key={`${order.id}-${order.user?.id}`} className="admin-order-card">
                 <div className="admin-order-header">
                   <div>
                     <div className="admin-order-id">Order {order.id}</div>
                     <div className="admin-order-user">
-                      {order.user?.name || "Unknown"} · {order.user?.email || "No email"}
+                      {order.user?.name || "Unknown"} - {order.user?.email || "No email"}
                     </div>
                   </div>
                   <div className="admin-order-actions">
@@ -476,3 +529,4 @@ const AdminComponent = () => {
 export default withAuthenticationRequired(AdminComponent, {
   onRedirecting: () => <Loading />,
 });
+
