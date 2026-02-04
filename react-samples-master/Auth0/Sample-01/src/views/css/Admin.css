@@ -124,6 +124,12 @@
   min-height: 720px;
 }
 
+.admin-people-panel {
+  display: grid;
+  grid-template-rows: 32px minmax(0, 1fr);
+  min-height: 720px;
+}
+
 .admin-card h2 {
   margin: 0;
 }
@@ -131,6 +137,10 @@
 .admin-users {
   display: grid;
   gap: 12px;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+  padding-right: 6px;
 }
 
 .admin-user-card {
@@ -489,6 +499,10 @@
   }
 
   .admin-orders-panel {
+    min-height: 0;
+  }
+
+  .admin-people-panel {
     min-height: 0;
   }
 

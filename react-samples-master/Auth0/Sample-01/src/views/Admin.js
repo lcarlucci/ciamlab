@@ -385,7 +385,7 @@ const AdminComponent = () => {
           </div>
         </section>
 
-        <section className="admin-card">
+        <section className="admin-card admin-people-panel">
           <h2 className="admin-orders-title">Orders</h2>
           <div className="admin-orders-header">
             <span className="admin-orders-subtitle">
