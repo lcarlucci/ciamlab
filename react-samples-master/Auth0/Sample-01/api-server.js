@@ -78,6 +78,11 @@ async function getManagementApiToken() {
   const audience = process.env.AUTH0_MGMT_AUDIENCE || `https://${authConfig.domain}/api/v2/`;
 
   if (!clientId || !clientSecret) {
+    console.error("Missing Auth0 Management API credentials", {
+      hasClientId: Boolean(clientId),
+      hasClientSecret: Boolean(clientSecret),
+      audience,
+    });
     throw new Error("Missing AUTH0_MGMT_CLIENT_ID or AUTH0_MGMT_CLIENT_SECRET.");
   }
 
@@ -95,6 +100,11 @@ async function getManagementApiToken() {
   const data = await response.json();
 
   if (!response.ok) {
+    console.error("Failed to obtain Management API token", {
+      status: response.status,
+      error: data?.error,
+      error_description: data?.error_description,
+    });
     throw new Error(data?.error_description || "Failed to obtain Management API token.");
   }
 
@@ -557,11 +567,16 @@ app.get("/api/user/roles", checkApiJwt, async (req, res) => {
   const userId = req.auth?.payload?.sub;
 
   if (!userId) {
+    console.error("GET /api/user/roles missing userId", {
+      authPayload: req.auth?.payload,
+    });
     return res.status(400).json({ message: "User id not available." });
   }
 
   try {
+    console.log("GET /api/user/roles start", { userId });
     const mgmtToken = await getManagementApiToken();
+    console.log("GET /api/user/roles got mgmt token");
     const response = await fetch(
       `https://${authConfig.domain}/api/v2/users/${encodeURIComponent(userId)}/roles`,
       {
@@ -575,14 +590,35 @@ app.get("/api/user/roles", checkApiJwt, async (req, res) => {
     const data = await response.json().catch(() => ([]));
 
     if (!response.ok) {
+      const requestId =
+        response.headers.get("x-auth0-requestid") ||
+        response.headers.get("x-request-id") ||
+        response.headers.get("x-amzn-requestid");
+      console.error("GET /api/user/roles failed", {
+        status: response.status,
+        message: data?.message,
+        error: data?.error,
+        requestId,
+      });
       return res.status(response.status).json({
         message: data?.message || "Error while fetching user roles.",
+        details: {
+          status: response.status,
+          error: data?.error,
+          error_description: data?.error_description,
+          requestId,
+        },
       });
     }
 
     const roles = Array.isArray(data) ? data.map((role) => role.name).filter(Boolean) : [];
+    console.log("GET /api/user/roles success", { userId, rolesCount: roles.length });
     return res.json({ roles });
   } catch (error) {
+    console.error("GET /api/user/roles exception", {
+      message: error?.message,
+      stack: error?.stack,
+    });
     return res.status(500).json({ message: error?.message || "Server error." });
   }
 });
