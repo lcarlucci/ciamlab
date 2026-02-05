@@ -16,6 +16,7 @@ export const ProfileComponent = () => {
   const [fieldStatus, setFieldStatus] = useState({});
   const [orders, setOrders] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [phoneVerified, setPhoneVerified] = useState(false);
   const [editingOrderId, setEditingOrderId] = useState(null);
   const [orderDrafts, setOrderDrafts] = useState({});
   const [orderActionStatus, setOrderActionStatus] = useState({});
@@ -159,11 +160,16 @@ export const ProfileComponent = () => {
         }
 
         const metadata = data?.user_metadata || {};
+        const rootPhoneNumber = data?.phone_number;
+        setPhoneVerified(Boolean(data?.phone_verified));
         setOrders(metadata.orders || []);
         setFieldValues((prev) => {
           const next = { ...prev };
           editableFields.forEach((field) => {
             if (field.key === "phone_number") {
+              if (rootPhoneNumber) {
+                next[field.key] = rootPhoneNumber;
+              }
               return;
             }
             if (metadata[field.key] !== undefined && metadata[field.key] !== null) {
@@ -310,7 +316,11 @@ export const ProfileComponent = () => {
   };
 
   const startPhoneVerification = async () => {
-    const phoneNumber = (fieldValues.phone_number || "").trim();
+    const rawInput = (fieldValues.phone_number || "").trim();
+    const normalizedInput = rawInput.replace(/\s+/g, "");
+    const phoneNumber = normalizedInput.startsWith("+")
+      ? normalizedInput
+      : `+39${normalizedInput}`;
     if (!phoneNumber) {
       setPhoneFlow({
         status: "error",
@@ -325,6 +335,9 @@ export const ProfileComponent = () => {
     setPhoneFlow((prev) => ({ ...prev, status: "loading", message: "" }));
 
     try {
+      if (phoneNumber !== fieldValues.phone_number) {
+        setFieldValues((prev) => ({ ...prev, phone_number: phoneNumber }));
+      }
       let mfaToken = "";
       try {
         mfaToken = await getAccessTokenSilently({
@@ -414,6 +427,7 @@ export const ProfileComponent = () => {
         status: "success",
         message: "Phone number verified.",
       }));
+      setPhoneVerified(true);
       setEditingField(null);
     } catch (err) {
       setPhoneFlow((prev) => ({
@@ -645,7 +659,18 @@ export const ProfileComponent = () => {
                           {field.note ? (
                             <span className="field-note">{field.note}</span>
                           ) : null}
-                          <span className="field-value">{value || "N/A"}</span>
+                          <span className="field-value">
+                            {value || "N/A"}
+                            {field.key === "phone_number" && value ? (
+                              <span
+                                className={`phone-badge ${
+                                  phoneVerified ? "verified" : "unverified"
+                                }`}
+                              >
+                                {phoneVerified ? "Verified" : "Unverified"}
+                              </span>
+                            ) : null}
+                          </span>
                         </div>
                       <button
                         className="field-edit-button icon-only"

@@ -228,6 +228,30 @@
   font-size: 0.95rem;
 }
 
+.phone-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 10px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.phone-badge.verified {
+  background: rgba(134, 188, 37, 0.18);
+  color: #4f7e16;
+  border: 1px solid rgba(134, 188, 37, 0.4);
+}
+
+.phone-badge.unverified {
+  background: rgba(255, 176, 0, 0.15);
+  color: #8a5b00;
+  border: 1px solid rgba(255, 176, 0, 0.35);
+}
+
 .field-edit-button {
   width: fit-content;
   padding: 6px 12px;

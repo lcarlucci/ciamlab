@@ -526,7 +526,9 @@ app.get("/api/user/profile", checkApiJwt, async (req, res) => {
   try {
     const mgmtToken = await getManagementApiToken();
     const response = await fetch(
-      `https://${authConfig.domain}/api/v2/users/${encodeURIComponent(userId)}?fields=user_metadata&include_fields=true`,
+      `https://${authConfig.domain}/api/v2/users/${encodeURIComponent(
+        userId
+      )}?fields=user_metadata,phone_number,phone_verified&include_fields=true`,
       {
         method: "GET",
         headers: {
@@ -545,6 +547,8 @@ app.get("/api/user/profile", checkApiJwt, async (req, res) => {
 
     return res.json({
       user_metadata: data?.user_metadata || {},
+      phone_number: data?.phone_number || "",
+      phone_verified: data?.phone_verified || false,
     });
   } catch (error) {
     return res.status(500).json({ message: error?.message || "Server error." });
