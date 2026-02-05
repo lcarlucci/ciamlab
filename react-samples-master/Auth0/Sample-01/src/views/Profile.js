@@ -329,10 +329,12 @@ export const ProfileComponent = () => {
         oobCode: "",
         otp: "",
       });
+      setPhoneVerified(false);
       return;
     }
 
     setPhoneFlow((prev) => ({ ...prev, status: "loading", message: "" }));
+    setPhoneVerified(false);
 
     try {
       if (phoneNumber !== fieldValues.phone_number) {
@@ -704,12 +706,16 @@ export const ProfileComponent = () => {
                             type="text"
                             value={value}
                             placeholder={field.placeholder}
-                            onChange={(event) =>
+                            onChange={(event) => {
+                              const nextValue = event.target.value;
                               setFieldValues((prev) => ({
                                 ...prev,
-                                [field.key]: event.target.value,
-                              }))
-                            }
+                                [field.key]: nextValue,
+                              }));
+                              if (field.key === "phone_number") {
+                                setPhoneVerified(false);
+                              }
+                            }}
                           />
                           {field.key === "phone_number" ? (
                             <>

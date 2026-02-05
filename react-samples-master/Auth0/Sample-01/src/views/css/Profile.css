@@ -247,9 +247,9 @@
 }
 
 .phone-badge.unverified {
-  background: rgba(255, 176, 0, 0.15);
-  color: #8a5b00;
-  border: 1px solid rgba(255, 176, 0, 0.35);
+  background: rgba(220, 38, 38, 0.14);
+  color: #b91c1c;
+  border: 1px solid rgba(220, 38, 38, 0.35);
 }
 
 .field-edit-button {
