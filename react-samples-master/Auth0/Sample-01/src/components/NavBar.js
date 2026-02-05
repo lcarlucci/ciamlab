@@ -80,7 +80,7 @@ const Navbar = () => {
     <header className={styles.header}>
       <div className={styles.logo}>
        <button
-          onClick={() => navigate(isAuthenticated ? "/home" : "/")}
+          onClick={() => navigate("/home")}
           style={{
             background: "none",
             border: "none",
@@ -90,8 +90,8 @@ const Navbar = () => {
           aria-label="Go to home or landing page"
         >
           <img
-            src=""//inserire logo qui //es: process.env.PUBLIC_URL + "/assets/logo.png"
-            alt=""//inserire alt qui
+            src={process.env.PUBLIC_URL + "/assets/deiam-logo.png"}
+            alt="DeIAM logo"
           />
         </button>
       </div>
