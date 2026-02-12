@@ -77,6 +77,7 @@ const Checkout = () => {
   const [mfaChecked, setMfaChecked] = useState(false);
   const [mfaVerified, setMfaVerified] = useState(false);
   const [showMfaDialog, setShowMfaDialog] = useState(false);
+  const [checkoutVerifiedPhone, setCheckoutVerifiedPhone] = useState("");
   const [mfaSession, setMfaSession] = useState({
     status: "idle",
     message: "",
@@ -137,7 +138,7 @@ const Checkout = () => {
     };
   }, [user, getAccessTokenSilently, config.audience, config.apiOrigin]);
 
-  const validate = () => {
+  const validate = (phoneOverride) => {
     const nextErrors = {};
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const phoneRegex = /^[+]?[\d\s().-]{6,}$/;
@@ -147,7 +148,8 @@ const Checkout = () => {
     if (!billing.fullName.trim()) nextErrors.fullName = "Full name is required.";
     if (!emailRegex.test(billing.email || "")) nextErrors.email = "Valid email is required.";
     if (!billing.company.trim()) nextErrors.company = "Company is required.";
-    if (!phoneRegex.test(billing.phone || "")) nextErrors.phone = "Valid phone is required.";
+    const phoneToValidate = phoneOverride || billing.phone;
+    if (!phoneRegex.test(phoneToValidate || "")) nextErrors.phone = "Valid phone is required.";
     if (!billing.address.trim()) nextErrors.address = "Billing address is required.";
     if (!billing.city.trim()) nextErrors.city = "City is required.";
     if (!billing.country.trim()) nextErrors.country = "Country is required.";
@@ -178,8 +180,8 @@ const Checkout = () => {
     return compact.startsWith("+") ? compact : `+39${compact}`;
   };
 
-  const resolveMfaChannel = () => {
-    const phoneCandidate = normalizePhone(billing.phone);
+  const resolveMfaChannel = (preferredPhone) => {
+    const phoneCandidate = normalizePhone(preferredPhone || "");
     const phoneValid = /^\+\d{6,}$/.test(phoneCandidate);
     if (phoneValid) {
       return { channel: "sms", target: phoneCandidate };
@@ -188,8 +190,28 @@ const Checkout = () => {
     return { channel: emailCandidate ? "email" : "", target: emailCandidate };
   };
 
-  const startCheckoutMfa = async () => {
-    const selection = resolveMfaChannel();
+  const fetchVerifiedPhoneProfile = async () => {
+    const token = await getAccessTokenSilently({
+      authorizationParams: { audience: config.audience },
+    });
+    const apiBase = config.apiOrigin || window.location.origin;
+    const response = await fetch(`${apiBase}/api/user/profile`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data?.message || "Unable to fetch user profile.");
+    }
+
+    return {
+      phoneNumber: data?.phone_number || "",
+      phoneVerified: Boolean(data?.phone_verified),
+    };
+  };
+
+  const startCheckoutMfa = async (preferredPhone) => {
+    const selection = resolveMfaChannel(preferredPhone);
     if (!selection.channel) {
       setMfaSession({
         status: "error",
@@ -364,7 +386,7 @@ const Checkout = () => {
     }
   };
 
-  const submitOrder = async () => {
+  const submitOrder = async (phoneOverride) => {
     setSubmitState({ status: "loading", message: "" });
 
     try {
@@ -373,6 +395,7 @@ const Checkout = () => {
       });
 
       const apiBase = config.apiOrigin || window.location.origin;
+      const phoneValue = phoneOverride || billing.phone;
       const order = {
         id: `ord_${Date.now()}`,
         createdAt: new Date().toISOString(),
@@ -382,7 +405,10 @@ const Checkout = () => {
           pricePerItem,
           currency: "EUR",
         },
-        billing,
+        billing: {
+          ...billing,
+          phone: phoneValue,
+        },
         payment: {
           method: paymentMethod,
           card: paymentMethod === "card" ? card : null,
@@ -418,7 +444,23 @@ const Checkout = () => {
   };
 
   const handlePlaceOrder = async () => {
-    const nextErrors = validate();
+    let verifiedPhoneCandidate = "";
+    if (mfaRequired) {
+      try {
+        const profile = await fetchVerifiedPhoneProfile();
+        if (profile.phoneVerified) {
+          const normalized = normalizePhone(profile.phoneNumber);
+          if (/^\+\d{6,}$/.test(normalized)) {
+            verifiedPhoneCandidate = normalized;
+          }
+        }
+      } catch {
+        verifiedPhoneCandidate = "";
+      }
+      setCheckoutVerifiedPhone(verifiedPhoneCandidate);
+    }
+
+    const nextErrors = validate(verifiedPhoneCandidate);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
       setSubmitState({ status: "error", message: "Please fix the highlighted fields." });
@@ -426,11 +468,11 @@ const Checkout = () => {
     }
 
     if (mfaRequired && !mfaVerified) {
-      await startCheckoutMfa();
+      await startCheckoutMfa(verifiedPhoneCandidate);
       return;
     }
 
-    await submitOrder();
+    await submitOrder(verifiedPhoneCandidate);
   };
 
   return (
@@ -895,7 +937,7 @@ const Checkout = () => {
               <button
                 className="checkout-secondary"
                 type="button"
-                onClick={startCheckoutMfa}
+                onClick={() => startCheckoutMfa(checkoutVerifiedPhone)}
                 disabled={mfaSession.status === "loading" || mfaSession.status === "verifying"}
               >
                 Resend code
