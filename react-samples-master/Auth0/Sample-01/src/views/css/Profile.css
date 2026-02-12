@@ -252,6 +252,12 @@
   border: 1px solid rgba(220, 38, 38, 0.35);
 }
 
+.phone-badge.pending {
+  background: rgba(234, 88, 12, 0.16);
+  color: #c2410c;
+  border: 1px solid rgba(234, 88, 12, 0.45);
+}
+
 .field-edit-button {
   width: fit-content;
   padding: 6px 12px;

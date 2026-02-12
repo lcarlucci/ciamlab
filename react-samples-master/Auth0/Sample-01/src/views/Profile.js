@@ -17,6 +17,11 @@ export const ProfileComponent = () => {
   const [orders, setOrders] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [phoneVerified, setPhoneVerified] = useState(false);
+  const [phoneSnapshotReady, setPhoneSnapshotReady] = useState(false);
+  const [phoneSnapshot, setPhoneSnapshot] = useState({
+    phoneNumber: "",
+    phoneVerified: false,
+  });
   const [editingOrderId, setEditingOrderId] = useState(null);
   const [orderDrafts, setOrderDrafts] = useState({});
   const [orderActionStatus, setOrderActionStatus] = useState({});
@@ -160,16 +165,19 @@ export const ProfileComponent = () => {
         }
 
         const metadata = data?.user_metadata || {};
-        const rootPhoneNumber = data?.phone_number;
-        setPhoneVerified(Boolean(data?.phone_verified));
+        const rootPhoneNumber = data?.phone_number || "";
+        const metadataPhoneNumber = metadata?.phone_number || "";
+        const resolvedPhoneNumber = rootPhoneNumber || metadataPhoneNumber;
+        const verified = Boolean(data?.phone_verified);
+        setPhoneVerified(verified);
+        setPhoneSnapshot({ phoneNumber: resolvedPhoneNumber, phoneVerified: verified });
+        setPhoneSnapshotReady(true);
         setOrders(metadata.orders || []);
         setFieldValues((prev) => {
           const next = { ...prev };
           editableFields.forEach((field) => {
             if (field.key === "phone_number") {
-              if (rootPhoneNumber) {
-                next[field.key] = rootPhoneNumber;
-              }
+              next[field.key] = resolvedPhoneNumber || "";
               return;
             }
             if (metadata[field.key] !== undefined && metadata[field.key] !== null) {
@@ -301,7 +309,11 @@ export const ProfileComponent = () => {
     const metaValue = currentUser?.user_metadata?.[fieldKey];
     const rootValue = currentUser?.[fieldKey];
     const fallbackValue = metaValue ?? rootValue ?? "";
-    setFieldValues((prev) => ({ ...prev, [fieldKey]: fallbackValue }));
+    const nextValue =
+      fieldKey === "phone_number" && phoneSnapshotReady
+        ? phoneSnapshot.phoneNumber
+        : fallbackValue;
+    setFieldValues((prev) => ({ ...prev, [fieldKey]: nextValue }));
     setEditingField(null);
     if (fieldKey === "phone_number") {
       setPhoneFlow({
@@ -312,7 +324,33 @@ export const ProfileComponent = () => {
         authenticatorId: "",
         otp: "",
       });
+      setPhoneVerified(phoneSnapshot.phoneVerified);
     }
+  };
+
+  const refreshPhoneProfile = async () => {
+    const token = await getAccessTokenSilently({
+      authorizationParams: { audience: config.audience },
+    });
+    const apiBase = config.apiOrigin || window.location.origin;
+    const response = await fetch(`${apiBase}/api/user/profile`, {
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data?.message || "Error while fetching profile metadata.");
+    }
+
+    const rootPhoneNumber = data?.phone_number || "";
+    const resolvedPhoneNumber = rootPhoneNumber || (fieldValues.phone_number || "");
+    const verified = Boolean(data?.phone_verified);
+    setPhoneVerified(verified);
+    setPhoneSnapshot({ phoneNumber: resolvedPhoneNumber, phoneVerified: verified });
+    setPhoneSnapshotReady(true);
+    setFieldValues((prev) => ({ ...prev, phone_number: resolvedPhoneNumber }));
   };
 
   const startPhoneVerification = async () => {
@@ -424,12 +462,17 @@ export const ProfileComponent = () => {
         throw new Error(buildErrorMessage(data, "OTP verification failed."));
       }
 
+      try {
+        await refreshPhoneProfile();
+      } catch {
+        setPhoneVerified(true);
+      }
+
       setPhoneFlow((prev) => ({
         ...prev,
         status: "success",
         message: "Phone number verified.",
       }));
-      setPhoneVerified(true);
       setEditingField(null);
     } catch (err) {
       setPhoneFlow((prev) => ({
@@ -652,6 +695,22 @@ export const ProfileComponent = () => {
                   const status = fieldStatus[field.key];
                   const isEditing = editingField === field.key;
                   const value = fieldValues[field.key] || "";
+                  const trimmedPhone = value.trim();
+                  const showPhoneBadge =
+                    field.key === "phone_number" &&
+                    (phoneVerified ||
+                      phoneFlow.status !== "idle" ||
+                      (isEditing && !trimmedPhone));
+                  const phoneBadgeTone = phoneVerified
+                    ? "verified"
+                    : phoneFlow.status === "code_sent" || phoneFlow.status === "verifying"
+                      ? "pending"
+                      : "unverified";
+                  const phoneBadgeLabel = phoneVerified
+                    ? "Verified"
+                    : phoneFlow.status === "code_sent" || phoneFlow.status === "verifying"
+                      ? "Verification pending"
+                      : "Not verified";
 
                   return (
                     <div key={field.key} className="profile-field compact">
@@ -663,13 +722,11 @@ export const ProfileComponent = () => {
                           ) : null}
                           <span className="field-value">
                             {value || "N/A"}
-                            {field.key === "phone_number" && value ? (
+                            {showPhoneBadge ? (
                               <span
-                                className={`phone-badge ${
-                                  phoneVerified ? "verified" : "unverified"
-                                }`}
+                                className={`phone-badge ${phoneBadgeTone}`}
                               >
-                                {phoneVerified ? "Verified" : "Unverified"}
+                                {phoneBadgeLabel}
                               </span>
                             ) : null}
                           </span>

@@ -7,7 +7,7 @@ import "./css/Checkout.css";
 const Checkout = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, getAccessTokenSilently } = useAuth0();
+  const { user, getAccessTokenSilently, getAccessTokenWithPopup } = useAuth0();
   const config = getConfig();
   const cart = location.state?.cart || [];
   const [storedCart, setStoredCart] = useState(() => {
@@ -73,6 +73,20 @@ const Checkout = () => {
   const [submitState, setSubmitState] = useState({ status: "idle", message: "" });
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [lastOrder, setLastOrder] = useState(null);
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [mfaChecked, setMfaChecked] = useState(false);
+  const [mfaVerified, setMfaVerified] = useState(false);
+  const [showMfaDialog, setShowMfaDialog] = useState(false);
+  const [mfaSession, setMfaSession] = useState({
+    status: "idle",
+    message: "",
+    channel: "",
+    target: "",
+    otp: "",
+    mfaToken: "",
+    oobCode: "",
+    authenticatorId: "",
+  });
 
   useEffect(() => {
     if (!user) return;
@@ -83,6 +97,45 @@ const Checkout = () => {
       phone: prev.phone || user?.phone_number || "",
     }));
   }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    let isMounted = true;
+
+    const loadRoles = async () => {
+      try {
+        const token = await getAccessTokenSilently({
+          authorizationParams: { audience: config.audience },
+        });
+        const apiBase = config.apiOrigin || window.location.origin;
+        const response = await fetch(`${apiBase}/api/user/roles`, {
+          headers: { authorization: `Bearer ${token}` },
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data?.message || "Unable to load roles.");
+        }
+        const roles = Array.isArray(data.roles) ? data.roles : [];
+        const requiresMfa = roles.some(
+          (role) => String(role || "").trim().toLowerCase() === "ciam demo mfa"
+        );
+        if (isMounted) {
+          setMfaRequired(requiresMfa);
+          setMfaChecked(true);
+        }
+      } catch {
+        if (isMounted) {
+          setMfaRequired(false);
+          setMfaChecked(true);
+        }
+      }
+    };
+
+    loadRoles();
+    return () => {
+      isMounted = false;
+    };
+  }, [user, getAccessTokenSilently, config.audience, config.apiOrigin]);
 
   const validate = () => {
     const nextErrors = {};
@@ -118,14 +171,200 @@ const Checkout = () => {
     return nextErrors;
   };
 
-  const handlePlaceOrder = async () => {
-    const nextErrors = validate();
-    setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) {
-      setSubmitState({ status: "error", message: "Please fix the highlighted fields." });
+  const normalizePhone = (value) => {
+    const raw = (value || "").trim();
+    if (!raw) return "";
+    const compact = raw.replace(/\s+/g, "");
+    return compact.startsWith("+") ? compact : `+39${compact}`;
+  };
+
+  const resolveMfaChannel = () => {
+    const phoneCandidate = normalizePhone(billing.phone);
+    const phoneValid = /^\+\d{6,}$/.test(phoneCandidate);
+    if (phoneValid) {
+      return { channel: "sms", target: phoneCandidate };
+    }
+    const emailCandidate = (billing.email || user?.email || "").trim();
+    return { channel: emailCandidate ? "email" : "", target: emailCandidate };
+  };
+
+  const startCheckoutMfa = async () => {
+    const selection = resolveMfaChannel();
+    if (!selection.channel) {
+      setMfaSession({
+        status: "error",
+        message: "No phone or email available for verification.",
+        channel: "",
+        target: "",
+        otp: "",
+        mfaToken: "",
+        oobCode: "",
+        authenticatorId: "",
+      });
+      setShowMfaDialog(true);
       return;
     }
 
+    setShowMfaDialog(true);
+    setMfaSession((prev) => ({
+      ...prev,
+      status: "loading",
+      message: "",
+      channel: selection.channel,
+      target: selection.target,
+    }));
+
+    try {
+      const apiBase = config.apiOrigin || window.location.origin;
+      if (selection.channel === "sms") {
+        let mfaToken = "";
+        try {
+          mfaToken = await getAccessTokenSilently({
+            authorizationParams: {
+              audience: `https://${config.domain}/mfa/`,
+              scope: "enroll read:authenticators remove:authenticators",
+            },
+          });
+        } catch {
+          mfaToken = await getAccessTokenWithPopup({
+            authorizationParams: {
+              audience: `https://${config.domain}/mfa/`,
+              scope: "enroll read:authenticators remove:authenticators",
+            },
+          });
+        }
+
+        const response = await fetch(`${apiBase}/api/mfa/enroll-sms`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${mfaToken}`,
+          },
+          body: JSON.stringify({ phoneNumber: selection.target, mfaToken, replaceExisting: false }),
+        });
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data?.message || "Unable to send SMS code.");
+        }
+
+        setMfaSession({
+          status: "code_sent",
+          message: "We sent a code to your phone.",
+          channel: "sms",
+          target: selection.target,
+          otp: "",
+          mfaToken,
+          oobCode: data?.oobCode || "",
+          authenticatorId: data?.authenticatorId || "",
+        });
+        return;
+      }
+
+      const apiToken = await getAccessTokenSilently({
+        authorizationParams: { audience: config.audience },
+      });
+      const response = await fetch(`${apiBase}/api/mfa/enroll-email`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${apiToken}`,
+        },
+        body: JSON.stringify({ email: selection.target }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.message || "Unable to send email code.");
+      }
+
+      setMfaSession({
+        status: "code_sent",
+        message: "We sent a code to your email.",
+        channel: "email",
+        target: data?.email || selection.target,
+        otp: "",
+        mfaToken: "",
+        oobCode: "",
+        authenticatorId: "",
+      });
+    } catch (err) {
+      setMfaSession((prev) => ({
+        ...prev,
+        status: "error",
+        message: err?.message || "Unable to start verification.",
+      }));
+    }
+  };
+
+  const verifyCheckoutMfa = async () => {
+    const otp = (mfaSession.otp || "").trim();
+    if (!otp) {
+      setMfaSession((prev) => ({
+        ...prev,
+        status: "error",
+        message: "Please enter the verification code.",
+      }));
+      return;
+    }
+
+    setMfaSession((prev) => ({ ...prev, status: "verifying", message: "" }));
+
+    try {
+      const apiBase = config.apiOrigin || window.location.origin;
+      if (mfaSession.channel === "sms") {
+        const response = await fetch(`${apiBase}/api/mfa/verify-sms`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${mfaSession.mfaToken}`,
+          },
+          body: JSON.stringify({
+            mfaToken: mfaSession.mfaToken,
+            oobCode: mfaSession.oobCode,
+            authenticatorId: mfaSession.authenticatorId,
+            otp,
+          }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data?.message || "SMS verification failed.");
+        }
+      } else {
+        const apiToken = await getAccessTokenSilently({
+          authorizationParams: { audience: config.audience },
+        });
+        const response = await fetch(`${apiBase}/api/mfa/verify-email`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${apiToken}`,
+          },
+          body: JSON.stringify({ otp, email: mfaSession.target }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data?.message || "Email verification failed.");
+        }
+      }
+
+      setMfaSession((prev) => ({
+        ...prev,
+        status: "success",
+        message: "Verification completed.",
+      }));
+      setMfaVerified(true);
+      setShowMfaDialog(false);
+      await submitOrder();
+    } catch (err) {
+      setMfaSession((prev) => ({
+        ...prev,
+        status: "error",
+        message: err?.message || "Verification failed.",
+      }));
+    }
+  };
+
+  const submitOrder = async () => {
     setSubmitState({ status: "loading", message: "" });
 
     try {
@@ -178,6 +417,22 @@ const Checkout = () => {
     }
   };
 
+  const handlePlaceOrder = async () => {
+    const nextErrors = validate();
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) {
+      setSubmitState({ status: "error", message: "Please fix the highlighted fields." });
+      return;
+    }
+
+    if (mfaRequired && !mfaVerified) {
+      await startCheckoutMfa();
+      return;
+    }
+
+    await submitOrder();
+  };
+
   return (
     <div className="checkout-container">
       <header className="checkout-hero">
@@ -216,9 +471,19 @@ const Checkout = () => {
                 type="email"
                 placeholder="jane@company.com"
                 value={billing.email}
-                onChange={(event) =>
-                  setBilling((prev) => ({ ...prev, email: event.target.value }))
-                }
+                onChange={(event) => {
+                  const nextValue = event.target.value;
+                  setBilling((prev) => ({ ...prev, email: nextValue }));
+                  if (mfaRequired) {
+                    setMfaVerified(false);
+                    setMfaSession((prev) => ({
+                      ...prev,
+                      status: "idle",
+                      message: "",
+                      otp: "",
+                    }));
+                  }
+                }}
               />
               {errors.email ? <span className="field-error">{errors.email}</span> : null}
             </div>
@@ -240,9 +505,19 @@ const Checkout = () => {
                 type="tel"
                 placeholder="+39 333 123 4567"
                 value={billing.phone}
-                onChange={(event) =>
-                  setBilling((prev) => ({ ...prev, phone: event.target.value }))
-                }
+                onChange={(event) => {
+                  const nextValue = event.target.value;
+                  setBilling((prev) => ({ ...prev, phone: nextValue }));
+                  if (mfaRequired) {
+                    setMfaVerified(false);
+                    setMfaSession((prev) => ({
+                      ...prev,
+                      status: "idle",
+                      message: "",
+                      otp: "",
+                    }));
+                  }
+                }}
               />
               {errors.phone ? <span className="field-error">{errors.phone}</span> : null}
             </div>
@@ -550,16 +825,90 @@ const Checkout = () => {
           </div>
           <button
             className="checkout-primary"
-            disabled={effectiveCart.length === 0 || submitState.status === "loading"}
+            disabled={
+              effectiveCart.length === 0 ||
+              submitState.status === "loading" ||
+              (mfaRequired && !mfaChecked)
+            }
             onClick={handlePlaceOrder}
           >
             {submitState.status === "loading" ? "Placing order..." : "Place Order"}
           </button>
+          {mfaRequired ? (
+            <div className="submit-status info">
+              MFA required for this account.
+            </div>
+          ) : null}
           {submitState.message ? (
             <div className={`submit-status ${submitState.status}`}>{submitState.message}</div>
           ) : null}
         </aside>
       </div>
+
+      {showMfaDialog ? (
+        <div className="checkout-dialog-overlay" role="dialog" aria-modal="true">
+          <div className="checkout-dialog mfa-dialog">
+            <div className="dialog-badge mfa-badge">
+              <span className="dialog-icon" aria-hidden="true">MFA</span>
+            </div>
+            <h2>Additional verification required</h2>
+            <p>
+              {mfaSession.channel === "sms"
+                ? "We sent a code to your phone to confirm this order."
+                : "We sent a code to your email to confirm this order."}
+            </p>
+            <div className="mfa-target">
+              <span className="mfa-chip">
+                {mfaSession.channel === "sms" ? "SMS" : "Email"}
+              </span>
+              <span className="mfa-value">{mfaSession.target || "—"}</span>
+            </div>
+            <div className="mfa-input-row">
+              <label>Verification code</label>
+              <input
+                className="mfa-input"
+                type="text"
+                placeholder="123456"
+                value={mfaSession.otp}
+                onChange={(event) =>
+                  setMfaSession((prev) => ({ ...prev, otp: event.target.value }))
+                }
+              />
+            </div>
+            <div className="mfa-actions">
+              <button
+                className="dialog-primary"
+                type="button"
+                onClick={verifyCheckoutMfa}
+                disabled={mfaSession.status === "verifying" || mfaSession.status === "loading"}
+              >
+                {mfaSession.status === "verifying" ? "Verifying..." : "Verify & place order"}
+              </button>
+              <button
+                className="checkout-secondary"
+                type="button"
+                onClick={() => setShowMfaDialog(false)}
+                disabled={mfaSession.status === "verifying"}
+              >
+                Cancel
+              </button>
+              <button
+                className="checkout-secondary"
+                type="button"
+                onClick={startCheckoutMfa}
+                disabled={mfaSession.status === "loading" || mfaSession.status === "verifying"}
+              >
+                Resend code
+              </button>
+            </div>
+            {mfaSession.message ? (
+              <div className={`submit-status ${mfaSession.status}`}>
+                {mfaSession.message}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       {showSuccessDialog ? (
         <div className="checkout-dialog-overlay" role="dialog" aria-modal="true">

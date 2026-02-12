@@ -787,6 +787,134 @@ app.post("/api/mfa/enroll-sms", checkMfaJwt, async (req, res) => {
   }
 });
 
+app.post("/api/mfa/enroll-email", checkApiJwt, async (req, res) => {
+  const userId = req.auth?.payload?.sub;
+
+  if (!userId) {
+    return res.status(400).json({ message: "User id not available." });
+  }
+
+  try {
+    const mgmtToken = await getManagementApiToken();
+    const userResponse = await fetch(
+      `https://${authConfig.domain}/api/v2/users/${encodeURIComponent(userId)}?fields=email&include_fields=true`,
+      {
+        method: "GET",
+        headers: {
+          authorization: `Bearer ${mgmtToken}`,
+        },
+      }
+    );
+
+    const userData = await userResponse.json().catch(() => ({}));
+    if (!userResponse.ok) {
+      return res.status(userResponse.status).json({
+        message: userData?.message || "Unable to read user email.",
+      });
+    }
+
+    const email = userData?.email || "";
+    if (!email) {
+      return res.status(400).json({ message: "User email not available." });
+    }
+
+    const payload = {
+      client_id: authConfig.clientId,
+      connection: "email",
+      email,
+      send: "code",
+    };
+    if (process.env.AUTH0_CLIENT_SECRET) {
+      payload.client_secret = process.env.AUTH0_CLIENT_SECRET;
+    }
+
+    const response = await fetch(`https://${authConfig.domain}/passwordless/start`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return res.status(response.status).json({
+        message: data?.error_description || data?.message || "Unable to send email code.",
+        details: data,
+      });
+    }
+
+    return res.json({ message: "Email code sent.", email });
+  } catch (error) {
+    return res.status(500).json({ message: error?.message || "Server error." });
+  }
+});
+
+app.post("/api/mfa/verify-email", checkApiJwt, async (req, res) => {
+  const userId = req.auth?.payload?.sub;
+  const otp = (req.body?.otp || "").trim();
+
+  if (!userId) {
+    return res.status(400).json({ message: "User id not available." });
+  }
+
+  if (!otp) {
+    return res.status(400).json({ message: "OTP code is required." });
+  }
+
+  try {
+    const mgmtToken = await getManagementApiToken();
+    const userResponse = await fetch(
+      `https://${authConfig.domain}/api/v2/users/${encodeURIComponent(userId)}?fields=email&include_fields=true`,
+      {
+        method: "GET",
+        headers: {
+          authorization: `Bearer ${mgmtToken}`,
+        },
+      }
+    );
+
+    const userData = await userResponse.json().catch(() => ({}));
+    if (!userResponse.ok) {
+      return res.status(userResponse.status).json({
+        message: userData?.message || "Unable to read user email.",
+      });
+    }
+
+    const email = userData?.email || "";
+    if (!email) {
+      return res.status(400).json({ message: "User email not available." });
+    }
+
+    const params = new URLSearchParams();
+    params.set("grant_type", "http://auth0.com/oauth/grant-type/passwordless/otp");
+    params.set("client_id", authConfig.clientId);
+    if (process.env.AUTH0_CLIENT_SECRET) {
+      params.set("client_secret", process.env.AUTH0_CLIENT_SECRET);
+    }
+    params.set("username", email);
+    params.set("otp", otp);
+    params.set("realm", "email");
+    params.set("scope", "openid profile email");
+
+    const response = await fetch(`https://${authConfig.domain}/oauth/token`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return res.status(response.status).json({
+        message: data?.error_description || data?.message || "Email verification failed.",
+        details: data,
+      });
+    }
+
+    return res.json({ message: "Email verification succeeded." });
+  } catch (error) {
+    return res.status(500).json({ message: error?.message || "Server error." });
+  }
+});
+
 app.post("/api/mfa/verify-sms", checkMfaJwt, async (req, res) => {
   const userId = req.auth?.payload?.sub;
   const mfaToken = req.body?.mfaToken;
