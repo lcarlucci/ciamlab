@@ -4,15 +4,20 @@ import Highlight from "../components/Highlight";
 import { useAuth0, withAuthenticationRequired } from "@auth0/auth0-react";
 import { getConfig } from "../config";
 import Loading from "../components/Loading";
+import "./css/ExternalAPI.css";
 
 export const ExternalApiComponent = () => {
   const { apiOrigin = "https://ciamlab.onrender.com", audience } = getConfig();
+  const apiBase = apiOrigin.replace(/\/+$/, "");
 
   const [state, setState] = useState({
     showResult: false,
     apiMessage: "",
     error: null,
   });
+  const [tokenPayload, setTokenPayload] = useState(null);
+  const [tokenHeader, setTokenHeader] = useState(null);
+  const [tokenError, setTokenError] = useState("");
 
   const { getAccessTokenSilently, loginWithPopup, getAccessTokenWithPopup } =
     useAuth0();
@@ -51,15 +56,45 @@ export const ExternalApiComponent = () => {
     await callApi();
   };
 
+  const decodeJwt = (jwt) => {
+    const parts = jwt.split(".");
+    if (parts.length !== 3) {
+      throw new Error("Token is not a JWT.");
+    }
+
+    const decodePart = (part) => {
+      const base64 = part.replace(/-/g, "+").replace(/_/g, "/");
+      const padded = base64.padEnd(base64.length + (4 - (base64.length % 4)) % 4, "=");
+      const json = atob(padded);
+      return JSON.parse(json);
+    };
+
+    return {
+      header: decodePart(parts[0]),
+      payload: decodePart(parts[1]),
+    };
+  };
+
   const callApi = async () => {
   try {
     const token = await getAccessTokenSilently({
-      audience: "https://ciamlab.onrender.com/audience",
+      audience: "https://ciamlab.onrender.com/api",
       scope: "openid profile email",
 
     });
 
-    const response = await fetch(`${apiOrigin}/api/external`, {
+    try {
+      const decoded = decodeJwt(token);
+      setTokenHeader(decoded.header);
+      setTokenPayload(decoded.payload);
+      setTokenError("");
+    } catch (err) {
+      setTokenHeader(null);
+      setTokenPayload(null);
+      setTokenError(err?.message || "Unable to decode token.");
+    }
+
+    const response = await fetch(`${apiBase}/api/external`, {
       headers: {
         Authorization: `Bearer ${token}`,
       }
@@ -87,14 +122,33 @@ export const ExternalApiComponent = () => {
   };
 
   return (
-    <>
-      <div className="mb-5">
+    <div className="external-api-container">
+      <div className="api-hero">
+        <div className="api-hero-text">
+          <span className="api-eyebrow">API Workspace</span>
+          <h1>External API</h1>
+          <p className="lead">
+            Ping an external API by clicking the button below.
+          </p>
+        </div>
+        <div className="api-hero-actions">
+          <Button
+            className="api-primary-btn"
+            onClick={callApi}
+            disabled={!audience}
+          >
+            Ping API
+          </Button>
+        </div>
+      </div>
+
+      <div className="api-card">
         {state.error === "consent_required" && (
-          <Alert color="warning">
+          <Alert color="warning" className="api-alert">
             You need to{" "}
             <a
               href="#/"
-              class="alert-link"
+              className="alert-link"
               onClick={(e) => handle(e, handleConsent)}
             >
               consent to get access to users api
@@ -103,22 +157,17 @@ export const ExternalApiComponent = () => {
         )}
 
         {state.error === "login_required" && (
-          <Alert color="warning">
+          <Alert color="warning" className="api-alert">
             You need to{" "}
             <a
               href="#/"
-              class="alert-link"
+              className="alert-link"
               onClick={(e) => handle(e, handleLoginAgain)}
             >
               log in again
             </a>
           </Alert>
         )}
-
-        <h1>External API</h1>
-        <p className="lead">
-          Ping an external API by clicking the button below.
-        </p>
 
         <p>
           This will call a local API on port 3001 that would have been started
@@ -128,7 +177,7 @@ export const ExternalApiComponent = () => {
         </p>
 
         {!audience && (
-          <Alert color="warning">
+          <Alert color="warning" className="api-alert">
             <p>
               You can't call the API at the moment because your application does
               not have any configuration for <code>audience</code>, or it is
@@ -172,28 +221,33 @@ export const ExternalApiComponent = () => {
             </p>
           </Alert>
         )}
-
-        <Button
-          color="primary"
-          className="mt-5"
-          onClick={callApi}
-          disabled={!audience}
-        >
-          Ping API
-        </Button>
       </div>
 
       <div className="result-block-container">
         {state.showResult && (
           <div className="result-block" data-testid="api-result">
-            <h6 className="muted">Result</h6>
+            <h6 className="muted">API Response</h6>
             <Highlight>
               <span>{JSON.stringify(state.apiMessage, null, 2)}</span>
             </Highlight>
           </div>
         )}
+        {state.showResult && (
+          <div className="result-block" data-testid="jwt-result">
+            <h6 className="muted">Decoded JWT</h6>
+            {tokenError ? (
+              <Highlight>
+                <span>{tokenError}</span>
+              </Highlight>
+            ) : (
+              <Highlight>
+                <span>{JSON.stringify({ header: tokenHeader, payload: tokenPayload }, null, 2)}</span>
+              </Highlight>
+            )}
+          </div>
+        )}
       </div>
-    </>
+    </div>
   );
 };
 

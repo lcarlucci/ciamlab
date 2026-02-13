@@ -8,6 +8,8 @@ import Home from "./views/Home";
 import Profile from "./views/Profile";
 import MainPageAfterLogin from "./components/MainPageAfterLogin";
 import ExternalApi from "./views/ExternalApi";
+import Checkout from "./views/Checkout";
+import Admin from "./views/Admin";
 import { useAuth0 } from "@auth0/auth0-react";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -48,6 +50,22 @@ const App = () => {
             element={
               <ProtectedRoute>
                 <ExternalApi />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute>
+                <Admin />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/checkout"
+            element={
+              <ProtectedRoute>
+                <Checkout />
               </ProtectedRoute>
             }
           />

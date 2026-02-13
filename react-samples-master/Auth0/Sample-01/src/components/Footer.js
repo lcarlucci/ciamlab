@@ -3,7 +3,7 @@ import React from "react";
 const Footer = () => {
   return (
     <footer style={styles.footer}>
-      © Deloitte – Cyber & IAM Services Portal
+      Cyber & IAM Services Portal
     </footer>
   );
 };
