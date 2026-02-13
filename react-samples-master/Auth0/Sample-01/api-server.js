@@ -740,6 +740,44 @@ app.post("/api/mfa/enroll-sms", checkMfaJwt, async (req, res) => {
       }
     }
 
+    if (replaceExisting && mfaToken) {
+      try {
+        const listResponse = await fetch(`https://${authConfig.domain}/mfa/authenticators`, {
+          headers: {
+            authorization: `Bearer ${mfaToken}`,
+          },
+        });
+
+        const listData = await listResponse.json().catch(() => []);
+        if (listResponse.ok && Array.isArray(listData)) {
+          const smsAuthenticators = listData.filter((authenticator) => {
+            if (!authenticator) return false;
+            const channel = String(authenticator.oob_channel || "").toLowerCase();
+            const type = String(authenticator.authenticator_type || authenticator.type || "").toLowerCase();
+            return channel === "sms" || type === "sms" || type === "oob";
+          });
+
+          await Promise.all(
+            smsAuthenticators.map((authenticator) =>
+              fetch(
+                `https://${authConfig.domain}/mfa/authenticators/${encodeURIComponent(
+                  authenticator.id
+                )}`,
+                {
+                  method: "DELETE",
+                  headers: {
+                    authorization: `Bearer ${mfaToken}`,
+                  },
+                }
+              ).catch(() => null)
+            )
+          );
+        }
+      } catch {
+        // Best effort: do not block enrollment if cleanup fails.
+      }
+    }
+
     const response = await fetch(`https://${authConfig.domain}/mfa/associate`, {
       method: "POST",
       headers: {
