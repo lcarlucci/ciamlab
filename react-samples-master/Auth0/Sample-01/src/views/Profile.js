@@ -490,7 +490,7 @@ export const ProfileComponent = () => {
   };
 
   const verifyPhoneOtp = async () => {
-    const otp = (phoneFlow.otp || "").trim();
+    const otp = (phoneFlow.otp || "").replace(/\D/g, "");
     if (!otp) {
       setPhoneFlow((prev) => ({
         ...prev,
@@ -886,7 +886,7 @@ export const ProfileComponent = () => {
                                     onChange={(event) =>
                                       setPhoneFlow((prev) => ({
                                         ...prev,
-                                        otp: event.target.value,
+                                        otp: event.target.value.replace(/\D/g, ""),
                                       }))
                                     }
                                   />

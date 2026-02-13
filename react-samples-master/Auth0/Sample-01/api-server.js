@@ -917,11 +917,11 @@ app.post("/api/mfa/verify-email", checkApiJwt, async (req, res) => {
 
 app.post("/api/mfa/verify-sms", checkMfaJwt, async (req, res) => {
   const userId = req.auth?.payload?.sub;
-  const mfaToken = req.body?.mfaToken;
-  const oobCode = req.body?.oobCode;
-  const bindingCode = (req.body?.otp || "").trim();
+  const mfaToken = (req.body?.mfaToken || "").trim();
+  const oobCode = (req.body?.oobCode || "").trim();
+  const bindingCode = String(req.body?.otp || "").replace(/\D/g, "");
   const phoneNumber = (req.body?.phoneNumber || "").trim();
-  const authenticatorId = req.body?.authenticatorId;
+  const authenticatorId = (req.body?.authenticatorId || "").trim();
 
   if (!userId) {
     return res.status(400).json({ message: "User id not available." });
