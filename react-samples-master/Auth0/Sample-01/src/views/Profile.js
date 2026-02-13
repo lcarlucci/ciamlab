@@ -33,8 +33,11 @@ export const ProfileComponent = () => {
     oobCode: "",
     authenticatorId: "",
     otp: "",
+    mode: "new",
   });
   const [toast, setToast] = useState(null);
+  const [requiresPhoneMfa, setRequiresPhoneMfa] = useState(false);
+  const [phoneEditUnlocked, setPhoneEditUnlocked] = useState(false);
   const toastTimeoutRef = useRef(null);
   const phoneCheckRef = useRef({
     inFlight: false,
@@ -108,8 +111,8 @@ export const ProfileComponent = () => {
     }
   };
 
-  const hasAdminRole = (payload) => {
-    if (!payload) return false;
+  const getRolesFromPayload = (payload) => {
+    if (!payload) return [];
     const roles = [];
     Object.entries(payload).forEach(([key, value]) => {
       if (!key.toLowerCase().includes("roles")) return;
@@ -117,11 +120,17 @@ export const ProfileComponent = () => {
         roles.push(...value);
       }
     });
-    return roles.some((role) => {
+    return roles;
+  };
+
+  const hasAdminRole = (roles) =>
+    roles.some((role) => {
       const normalized = String(role || "").toLowerCase();
       return normalized === "administrator" || normalized === "administator";
     });
-  };
+
+  const hasMfaRole = (roles) =>
+    roles.some((role) => String(role || "").trim().toLowerCase() === "ciam demo mfa");
 
   // User context
   const mockUser = {
@@ -197,8 +206,12 @@ export const ProfileComponent = () => {
           authorizationParams: { audience: config.audience },
         });
         const payload = decodeJwtPayload(token);
-        const tokenAdmin = hasAdminRole(payload);
+        const payloadRoles = getRolesFromPayload(payload);
+        const hasPayloadRoles = payloadRoles.length > 0;
+        const tokenAdmin = hasAdminRole(payloadRoles);
+        const tokenMfa = hasMfaRole(payloadRoles);
         setIsAdmin(tokenAdmin);
+        setRequiresPhoneMfa(tokenMfa);
 
         const apiBase = config.apiOrigin || window.location.origin;
         const response = await fetch(`${apiBase}/api/user/profile`, {
@@ -235,7 +248,7 @@ export const ProfileComponent = () => {
           return next;
         });
 
-        if (!tokenAdmin) {
+        if (!hasPayloadRoles) {
           const rolesResponse = await fetch(`${apiBase}/api/user/roles`, {
             headers: {
               authorization: `Bearer ${token}`,
@@ -243,7 +256,8 @@ export const ProfileComponent = () => {
           });
           const rolesData = await rolesResponse.json().catch(() => ({}));
           if (rolesResponse.ok && Array.isArray(rolesData.roles)) {
-            setIsAdmin(hasAdminRole({ roles: rolesData.roles }));
+            setIsAdmin(hasAdminRole(rolesData.roles));
+            setRequiresPhoneMfa(hasMfaRole(rolesData.roles));
           }
         }
       } catch (err) {
@@ -269,11 +283,9 @@ export const ProfileComponent = () => {
         : "To change your password, use your login provider settings."
     : "";
 
-  // Phone + MFA helpers
-  const openAuth0MfaSettings = () => {
-    const url = `https://${config.domain}/u/mfa`;
-    window.open(url, "auth0-mfa", "width=520,height=700");
-  };
+  const requiresOldPhoneOtp =
+    isSocialUser && requiresPhoneMfa && phoneSnapshotReady && phoneSnapshot.phoneNumber;
+  const shouldUseOtpFlow = !isSocialUser || requiresPhoneMfa;
 
   const checkPhoneAvailability = async (phoneNumber) => {
     const normalized = normalizePhoneNumber(phoneNumber);
@@ -440,8 +452,10 @@ export const ProfileComponent = () => {
         oobCode: "",
         authenticatorId: "",
         otp: "",
+        mode: "new",
       });
       setPhoneVerified(phoneSnapshot.phoneVerified);
+      setPhoneEditUnlocked(false);
     }
   };
 
@@ -470,6 +484,7 @@ export const ProfileComponent = () => {
         oobCode: "",
         authenticatorId: "",
         otp: "",
+        mode: "new",
       }));
       return mfaToken;
     } catch (err) {
@@ -501,9 +516,12 @@ export const ProfileComponent = () => {
       return;
     }
 
-    if (fieldKey === "phone_number" && !isSocialUser) {
-      const token = await requestPhoneMfaToken();
-      if (!token) return;
+    if (fieldKey === "phone_number") {
+      setPhoneEditUnlocked(false);
+      if (!isSocialUser || requiresPhoneMfa) {
+        const token = await requestPhoneMfaToken();
+        if (!token) return;
+      }
     }
 
     setEditingField(fieldKey);
@@ -534,8 +552,9 @@ export const ProfileComponent = () => {
     setFieldValues((prev) => ({ ...prev, phone_number: resolvedPhoneNumber }));
   };
 
-  const startPhoneVerification = async () => {
-    const rawInput = (fieldValues.phone_number || "").trim();
+  const startPhoneVerification = async (options = {}) => {
+    const { phoneNumberOverride, mode = "new", updateField = true } = options;
+    const rawInput = ((phoneNumberOverride ?? fieldValues.phone_number) || "").trim();
     const phoneNumber = normalizePhoneNumber(rawInput);
     if (!phoneNumber) {
       setPhoneFlow({
@@ -544,6 +563,7 @@ export const ProfileComponent = () => {
         mfaToken: "",
         oobCode: "",
         otp: "",
+        mode,
       });
       setPhoneVerified(false);
       return;
@@ -564,11 +584,11 @@ export const ProfileComponent = () => {
       return;
     }
 
-    setPhoneFlow((prev) => ({ ...prev, status: "loading", message: "" }));
+    setPhoneFlow((prev) => ({ ...prev, status: "loading", message: "", mode }));
     setPhoneVerified(false);
 
     try {
-      if (phoneNumber !== fieldValues.phone_number) {
+      if (updateField && phoneNumber !== fieldValues.phone_number) {
         setFieldValues((prev) => ({ ...prev, phone_number: phoneNumber }));
       }
       const mfaToken = phoneFlow.mfaToken;
@@ -595,17 +615,20 @@ export const ProfileComponent = () => {
         oobCode: data?.oobCode || "",
         authenticatorId: data?.authenticatorId || "",
         otp: "",
+        mode,
       });
     } catch (err) {
       setPhoneFlow((prev) => ({
         ...prev,
         status: "error",
         message: err?.message || "Unable to send OTP.",
+        mode,
       }));
     }
   };
 
-  const verifyPhoneOtp = async () => {
+  const verifyPhoneOtp = async (options = {}) => {
+    const { phoneNumberOverride } = options;
     const otp = (phoneFlow.otp || "").replace(/\D/g, "");
     if (!otp) {
       setPhoneFlow((prev) => ({
@@ -619,7 +642,9 @@ export const ProfileComponent = () => {
     setPhoneFlow((prev) => ({ ...prev, status: "verifying", message: "" }));
 
     try {
-      const phoneNumber = normalizePhoneNumber(fieldValues.phone_number || "");
+      const phoneNumber = normalizePhoneNumber(
+        ((phoneNumberOverride ?? fieldValues.phone_number) || "")
+      );
       const apiBase = config.apiOrigin || window.location.origin;
       const response = await fetch(`${apiBase}/api/mfa/verify-sms`, {
         method: "POST",
@@ -645,6 +670,17 @@ export const ProfileComponent = () => {
         throw new Error(buildErrorMessage(data, "OTP verification failed."));
       }
 
+      if (phoneFlow.mode === "old") {
+        setPhoneEditUnlocked(true);
+        setPhoneFlow((prev) => ({
+          ...prev,
+          status: "success",
+          message: "Current phone verified. You can update the number.",
+          otp: "",
+        }));
+        return;
+      }
+
       try {
         await refreshPhoneProfile();
       } catch {
@@ -657,6 +693,7 @@ export const ProfileComponent = () => {
         message: "Phone number verified.",
       }));
       setEditingField(null);
+      setPhoneEditUnlocked(false);
     } catch (err) {
       setPhoneFlow((prev) => ({
         ...prev,
@@ -964,6 +1001,11 @@ export const ProfileComponent = () => {
                             type="text"
                             value={value}
                             placeholder={field.placeholder}
+                            disabled={
+                              field.key === "phone_number" &&
+                              requiresOldPhoneOtp &&
+                              !phoneEditUnlocked
+                            }
                             onChange={(event) => {
                               const nextValue = event.target.value;
                               setFieldValues((prev) => ({
@@ -991,97 +1033,168 @@ export const ProfileComponent = () => {
                             }}
                           />
                           {field.key === "phone_number" ? (
-                            isSocialUser ? (
-                              <>
-                                <div className="field-edit-actions">
-                                  <button
-                                    className="field-save-button"
-                                    onClick={() => handleFieldSave(field.key)}
-                                    disabled={status?.status === "loading"}
-                                    type="button"
-                                  >
-                                    {status?.status === "loading" ? "Saving..." : "Save"}
-                                  </button>
-                                  <button
-                                    className="field-cancel-button"
-                                    onClick={() => handleCancelEdit(field.key)}
-                                    type="button"
-                                  >
-                                    Cancel
-                                  </button>
-                                  <button
-                                    className="field-cancel-button"
-                                    onClick={openAuth0MfaSettings}
-                                    type="button"
-                                  >
-                                    Manage MFA
-                                  </button>
-                                </div>
-                                <div className="field-note">
-                                  MFA factors are managed in Auth0 for social logins.
-                                </div>
-                              </>
-                            ) : (
-                              <>
-                                <div className="field-edit-actions">
-                                  <button
-                                    className="field-save-button"
-                                    onClick={startPhoneVerification}
-                                    disabled={phoneFlow.status === "loading"}
-                                    type="button"
-                                  >
-                                    {phoneFlow.status === "loading"
-                                      ? "Sending..."
-                                      : phoneFlow.status === "code_sent"
-                                        ? "Resend OTP"
-                                        : "Send OTP"}
-                                  </button>
-                                  <button
-                                    className="field-cancel-button"
-                                    onClick={() => handleCancelEdit(field.key)}
-                                    type="button"
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                                {phoneFlow.status === "code_sent" ||
-                                phoneFlow.status === "verifying" ||
-                                phoneFlow.status === "success" ||
-                                phoneFlow.status === "error" ? (
-                                  <div className="field-otp">
-                                    <label>OTP code</label>
-                                    <input
-                                      className="field-input"
-                                      type="text"
-                                      value={phoneFlow.otp}
-                                      placeholder="123456"
-                                      onChange={(event) =>
-                                        setPhoneFlow((prev) => ({
-                                          ...prev,
-                                          otp: event.target.value.replace(/\D/g, ""),
-                                        }))
+                            shouldUseOtpFlow ? (
+                              requiresOldPhoneOtp && !phoneEditUnlocked ? (
+                                <>
+                                  <div className="field-note">
+                                    Verify your current phone number to update it.
+                                  </div>
+                                  <div className="field-edit-actions">
+                                    <button
+                                      className="field-save-button"
+                                      onClick={() =>
+                                        startPhoneVerification({
+                                          phoneNumberOverride: phoneSnapshot.phoneNumber,
+                                          mode: "old",
+                                          updateField: false,
+                                        })
                                       }
-                                    />
-                                    <div className="field-edit-actions">
-                                      <button
-                                        className="field-save-button"
-                                        onClick={verifyPhoneOtp}
-                                        disabled={phoneFlow.status === "verifying"}
-                                        type="button"
-                                      >
-                                        {phoneFlow.status === "verifying"
-                                          ? "Verifying..."
-                                          : "Verify"}
-                                      </button>
+                                      disabled={phoneFlow.status === "loading"}
+                                      type="button"
+                                    >
+                                      {phoneFlow.status === "loading"
+                                        ? "Sending..."
+                                        : phoneFlow.status === "code_sent"
+                                          ? "Resend OTP"
+                                          : "Send OTP"}
+                                    </button>
+                                    <button
+                                      className="field-cancel-button"
+                                      onClick={() => handleCancelEdit(field.key)}
+                                      type="button"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                  {phoneFlow.mode === "old" &&
+                                  (phoneFlow.status === "code_sent" ||
+                                    phoneFlow.status === "verifying" ||
+                                    phoneFlow.status === "success" ||
+                                    phoneFlow.status === "error") ? (
+                                    <div className="field-otp">
+                                      <label>OTP code</label>
+                                      <input
+                                        className="field-input"
+                                        type="text"
+                                        value={phoneFlow.otp}
+                                        placeholder="123456"
+                                        onChange={(event) =>
+                                          setPhoneFlow((prev) => ({
+                                            ...prev,
+                                            otp: event.target.value.replace(/\D/g, ""),
+                                          }))
+                                        }
+                                      />
+                                      <div className="field-edit-actions">
+                                        <button
+                                          className="field-save-button"
+                                          onClick={() =>
+                                            verifyPhoneOtp({
+                                              phoneNumberOverride: phoneSnapshot.phoneNumber,
+                                            })
+                                          }
+                                          disabled={phoneFlow.status === "verifying"}
+                                          type="button"
+                                        >
+                                          {phoneFlow.status === "verifying"
+                                            ? "Verifying..."
+                                            : "Verify"}
+                                        </button>
+                                      </div>
                                     </div>
+                                  ) : null}
+                                  {phoneFlow.mode === "old" && phoneFlow.message ? (
+                                    <div className={`field-status ${phoneFlow.status}`}>
+                                      {phoneFlow.message}
+                                    </div>
+                                  ) : null}
+                                </>
+                              ) : (
+                                <>
+                                  <div className="field-edit-actions">
+                                    <button
+                                      className="field-save-button"
+                                      onClick={() =>
+                                        startPhoneVerification({
+                                          mode: "new",
+                                          updateField: true,
+                                        })
+                                      }
+                                      disabled={phoneFlow.status === "loading"}
+                                      type="button"
+                                    >
+                                      {phoneFlow.status === "loading"
+                                        ? "Sending..."
+                                        : phoneFlow.status === "code_sent"
+                                          ? "Resend OTP"
+                                          : "Send OTP"}
+                                    </button>
+                                    <button
+                                      className="field-cancel-button"
+                                      onClick={() => handleCancelEdit(field.key)}
+                                      type="button"
+                                    >
+                                      Cancel
+                                    </button>
                                   </div>
-                                ) : null}
-                                {phoneFlow.message ? (
-                                  <div className={`field-status ${phoneFlow.status}`}>
-                                    {phoneFlow.message}
-                                  </div>
-                                ) : null}
-                              </>
+                                  {phoneFlow.mode !== "old" &&
+                                  (phoneFlow.status === "code_sent" ||
+                                    phoneFlow.status === "verifying" ||
+                                    phoneFlow.status === "success" ||
+                                    phoneFlow.status === "error") ? (
+                                    <div className="field-otp">
+                                      <label>OTP code</label>
+                                      <input
+                                        className="field-input"
+                                        type="text"
+                                        value={phoneFlow.otp}
+                                        placeholder="123456"
+                                        onChange={(event) =>
+                                          setPhoneFlow((prev) => ({
+                                            ...prev,
+                                            otp: event.target.value.replace(/\D/g, ""),
+                                          }))
+                                        }
+                                      />
+                                      <div className="field-edit-actions">
+                                        <button
+                                          className="field-save-button"
+                                          onClick={verifyPhoneOtp}
+                                          disabled={phoneFlow.status === "verifying"}
+                                          type="button"
+                                        >
+                                          {phoneFlow.status === "verifying"
+                                            ? "Verifying..."
+                                            : "Verify"}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                  {phoneFlow.mode !== "old" && phoneFlow.message ? (
+                                    <div className={`field-status ${phoneFlow.status}`}>
+                                      {phoneFlow.message}
+                                    </div>
+                                  ) : null}
+                                </>
+                              )
+                            ) : (
+                              <div className="field-edit-actions">
+                                <button
+                                  className="field-save-button"
+                                  onClick={() => handleFieldSave(field.key)}
+                                  disabled={status?.status === "loading"}
+                                  type="button"
+                                >
+                                  {status?.status === "loading" ? "Saving..." : "Save"}
+                                </button>
+                                <button
+                                  className="field-cancel-button"
+                                  onClick={() => handleCancelEdit(field.key)}
+                                  type="button"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
                             )
                           ) : (
                             <div className="field-edit-actions">
