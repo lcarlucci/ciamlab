@@ -5,6 +5,9 @@ const helmet = require("helmet");
 const path = require("path");
 const { auth } = require("express-oauth2-jwt-bearer");
 
+// ----------------------------
+// Auth0 configuration
+// ----------------------------
 const authConfig = {
   domain: "identity-auth0.cic-demo-platform.auth0app.com",
   clientId: "Iwab1kMZj0fPOTZnWwtt5KI5yTBTOrLV",
@@ -13,6 +16,9 @@ const authConfig = {
   apiOrigin: "https://ciamlab.onrender.com"
 };
 
+// ----------------------------
+// App setup
+// ----------------------------
 const app = express();
 
 // Render imposta il PORT con la variabile d'ambiente
@@ -59,7 +65,9 @@ app.use(
 //modifica
 app.use(cors({ origin: appOrigin }));
 
-// Middleware per autenticazione JWT
+// ----------------------------
+// JWT middleware
+// ----------------------------
 const checkApiJwt = auth({
   audience: authConfig.audience,
   issuerBaseURL: `https://${authConfig.domain}/`,
@@ -72,6 +80,9 @@ const checkMfaJwt = auth({
   algorithms: ["RS256"],
 });
 
+// ----------------------------
+// Auth0 Management helpers
+// ----------------------------
 async function getManagementApiToken() {
   const clientId = process.env.AUTH0_MGMT_CLIENT_ID;
   const clientSecret = process.env.AUTH0_MGMT_CLIENT_SECRET;
@@ -111,6 +122,9 @@ async function getManagementApiToken() {
   return data.access_token;
 }
 
+// ----------------------------
+// Profile + metadata
+// ----------------------------
 app.patch("/api/user/phone", checkApiJwt, async (req, res) => {
   const phoneNumber = (req.body?.phoneNumber || "").trim();
   const userId = req.auth?.payload?.sub;
@@ -155,6 +169,9 @@ app.patch("/api/user/phone", checkApiJwt, async (req, res) => {
   }
 });
 
+// ----------------------------
+// Validation constants
+// ----------------------------
 const ALLOWED_USER_METADATA_FIELDS = new Set([
   "name",
   "given_name",
@@ -171,7 +188,11 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const phoneRegex = /^[+]?[\d\s().-]{6,}$/;
 const vatRegex = /^(IT)?\d{11}$/i;
 const sdiRegex = /^[A-Za-z0-9]{7}$/;
+const ROOT_PHONE_PROVIDERS = new Set(["auth0", "sms"]);
 
+// ----------------------------
+// Role helpers
+// ----------------------------
 function getRolesFromPayload(payload) {
   if (!payload) return [];
   const roles = [];
@@ -212,6 +233,9 @@ async function hasAdminRoleForUser(userId) {
   return isAdminPayload({ roles });
 }
 
+// ----------------------------
+// Order validation
+// ----------------------------
 function validateOrder(order) {
   const errors = {};
   const billing = order.billing || {};
@@ -249,6 +273,9 @@ function validateOrder(order) {
   return errors;
 }
 
+// ----------------------------
+// Profile endpoints
+// ----------------------------
 app.patch("/api/user/profile", checkApiJwt, async (req, res) => {
   const field = (req.body?.field || "").trim();
   const valueRaw = req.body?.value ?? "";
@@ -373,6 +400,9 @@ app.post("/api/orders", checkApiJwt, async (req, res) => {
   }
 });
 
+// ----------------------------
+// User orders (self + admin)
+// ----------------------------
 app.patch("/api/orders/:orderId", checkApiJwt, async (req, res) => {
   const userId = req.auth?.payload?.sub;
   const orderId = req.params.orderId;
@@ -526,6 +556,9 @@ app.delete("/api/orders/:orderId", checkApiJwt, async (req, res) => {
   }
 });
 
+// ----------------------------
+// User data
+// ----------------------------
 app.get("/api/user/profile", checkApiJwt, async (req, res) => {
   const userId = req.auth?.payload?.sub;
 
@@ -553,10 +586,63 @@ app.get("/api/user/profile", checkApiJwt, async (req, res) => {
       });
     }
 
+    const provider = String(userId || "").split("|")[0];
+    const isRootPhoneProvider = ROOT_PHONE_PROVIDERS.has(provider);
+    const metadata = data?.user_metadata || {};
+
+    if (!isRootPhoneProvider) {
+      const metadataPatch = {};
+      const rootValues = {
+        name: data?.name,
+        given_name: data?.given_name,
+        family_name: data?.family_name,
+        email: data?.email,
+        phone_number: data?.phone_number,
+        birthdate: data?.birthdate,
+        zoneinfo: data?.zoneinfo,
+      };
+
+      ALLOWED_USER_METADATA_FIELDS.forEach((field) => {
+        if (!rootValues[field]) return;
+        if (metadata[field] !== undefined && metadata[field] !== null && metadata[field] !== "") {
+          return;
+        }
+        metadataPatch[field] = rootValues[field];
+      });
+
+      if (Object.keys(metadataPatch).length > 0) {
+        try {
+          await fetch(
+            `https://${authConfig.domain}/api/v2/users/${encodeURIComponent(userId)}`,
+            {
+              method: "PATCH",
+              headers: {
+                "content-type": "application/json",
+                authorization: `Bearer ${mgmtToken}`,
+              },
+              body: JSON.stringify({
+                user_metadata: metadataPatch,
+              }),
+            }
+          );
+          Object.assign(metadata, metadataPatch);
+        } catch {
+          // Best effort: do not block profile response if sync fails.
+        }
+      }
+    }
+
+    const resolvedPhoneNumber = isRootPhoneProvider
+      ? data?.phone_number || metadata.phone_number || ""
+      : metadata.phone_number || data?.phone_number || "";
+    const resolvedPhoneVerified = isRootPhoneProvider
+      ? Boolean(data?.phone_verified) || Boolean(metadata.phone_verified)
+      : Boolean(metadata.phone_verified) || Boolean(data?.phone_verified);
+
     return res.json({
-      user_metadata: data?.user_metadata || {},
-      phone_number: data?.phone_number || "",
-      phone_verified: data?.phone_verified || false,
+      user_metadata: metadata,
+      phone_number: resolvedPhoneNumber,
+      phone_verified: resolvedPhoneVerified,
     });
   } catch (error) {
     return res.status(500).json({ message: error?.message || "Server error." });
@@ -623,6 +709,65 @@ app.get("/api/user/roles", checkApiJwt, async (req, res) => {
   }
 });
 
+app.get("/api/user/phone-availability", checkApiJwt, async (req, res) => {
+  const userId = req.auth?.payload?.sub;
+  const phoneNumberRaw = (req.query?.phoneNumber || "").trim();
+  const phoneNumber = phoneNumberRaw.replace(/[^\d+]/g, "");
+
+  if (!userId) {
+    return res.status(400).json({ message: "User id not available." });
+  }
+
+  if (!phoneNumber || !/^\+\d{6,}$/.test(phoneNumber)) {
+    return res.status(400).json({ message: "Phone number is required." });
+  }
+
+  try {
+    const mgmtToken = await getManagementApiToken();
+    const query = `(phone_number:"${phoneNumber}" OR user_metadata.phone_number:"${phoneNumber}")`;
+    const response = await fetch(
+      `https://${authConfig.domain}/api/v2/users?q=${encodeURIComponent(
+        query
+      )}&search_engine=v3&fields=user_id,phone_number,user_metadata&include_fields=true`,
+      {
+        method: "GET",
+        headers: {
+          authorization: `Bearer ${mgmtToken}`,
+        },
+      }
+    );
+
+    const data = await response.json().catch(() => ([]));
+    if (!response.ok) {
+      return res.json({ available: true, checked: false });
+    }
+
+    const users = Array.isArray(data) ? data : [];
+    const exists = users.some((user) => {
+      if (!user || user.user_id === userId) return false;
+      const rootPhone = String(user.phone_number || "");
+      const metaPhone = String(user.user_metadata?.phone_number || "");
+      return rootPhone === phoneNumber || metaPhone === phoneNumber;
+    });
+
+    if (exists) {
+      return res.json({
+        available: false,
+        checked: true,
+        message:
+          "Numero di telefono già in uso per un altro account. Non è possibile utilizzare lo stesso numero.",
+      });
+    }
+
+    return res.json({ available: true, checked: true });
+  } catch (error) {
+    return res.json({ available: true, checked: false });
+  }
+});
+
+// ----------------------------
+// Admin overview
+// ----------------------------
 app.get("/api/admin/overview", checkApiJwt, async (req, res) => {
   const userId = req.auth?.payload?.sub;
 
@@ -696,6 +841,9 @@ app.get("/api/admin/overview", checkApiJwt, async (req, res) => {
   }
 });
 
+// ----------------------------
+// MFA endpoints
+// ----------------------------
 app.post("/api/mfa/enroll-sms", checkMfaJwt, async (req, res) => {
   const userId = req.auth?.payload?.sub;
   const phoneNumberRaw = (req.body?.phoneNumber || "").trim();
@@ -1010,24 +1158,80 @@ app.post("/api/mfa/verify-sms", checkMfaJwt, async (req, res) => {
     }
 
     if (phoneNumber) {
+      const provider = String(userId || "").split("|")[0];
+      const isRootPhoneProvider = ROOT_PHONE_PROVIDERS.has(provider);
       const mgmtToken = await getManagementApiToken();
-      const updateResponse = await fetch(
-        `https://${authConfig.domain}/api/v2/users/${encodeURIComponent(userId)}`,
-        {
-        method: "PATCH",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${mgmtToken}`,
-        },
-        body: JSON.stringify({
+      const rootPayload = {
+        phone_number: phoneNumber,
+        phone_verified: true,
+      };
+      const metadataPayload = {
+        user_metadata: {
           phone_number: phoneNumber,
           phone_verified: true,
-        }),
-        }
-      );
+        },
+      };
 
-      const updateData = await updateResponse.json().catch(() => ({}));
+      const updateRootPhone = async () =>
+        fetch(
+          `https://${authConfig.domain}/api/v2/users/${encodeURIComponent(userId)}`,
+          {
+            method: "PATCH",
+            headers: {
+              "content-type": "application/json",
+              authorization: `Bearer ${mgmtToken}`,
+            },
+            body: JSON.stringify(rootPayload),
+          }
+        );
+
+      const updateMetadataPhone = async () =>
+        fetch(
+          `https://${authConfig.domain}/api/v2/users/${encodeURIComponent(userId)}`,
+          {
+            method: "PATCH",
+            headers: {
+              "content-type": "application/json",
+              authorization: `Bearer ${mgmtToken}`,
+            },
+            body: JSON.stringify(metadataPayload),
+          }
+        );
+
+      let updateResponse = isRootPhoneProvider ? await updateRootPhone() : await updateMetadataPhone();
+      let updateData = await updateResponse.json().catch(() => ({}));
+
       if (!updateResponse.ok) {
+        const description = String(updateData?.message || updateData?.error_description || "");
+        const isDuplicatePhone =
+          description.toLowerCase().includes("phone_number already exists") ||
+          description.toLowerCase().includes("phone_number already exist");
+
+        if (isRootPhoneProvider && isDuplicatePhone) {
+          if (mfaToken && authenticatorId) {
+            try {
+              await fetch(
+                `https://${authConfig.domain}/mfa/authenticators/${encodeURIComponent(
+                  authenticatorId
+                )}`,
+                {
+                  method: "DELETE",
+                  headers: {
+                    authorization: `Bearer ${mfaToken}`,
+                  },
+                }
+              );
+            } catch {
+              // Best effort: do not block error response if cleanup fails.
+            }
+          }
+          return res.status(409).json({
+            message:
+              "Numero di telefono già in uso per un altro account. Non è possibile utilizzare lo stesso numero.",
+            code: "PHONE_IN_USE",
+          });
+        }
+
         const requestId =
           updateResponse.headers.get("x-auth0-requestid") ||
           updateResponse.headers.get("x-request-id") ||
@@ -1098,6 +1302,9 @@ app.post("/api/mfa/verify-sms", checkMfaJwt, async (req, res) => {
   }
 });
 
+// ----------------------------
+// Misc API endpoints
+// ----------------------------
 // API protetta
 app.get("/api/external", checkApiJwt, (req, res) => {
   res.send({
@@ -1105,6 +1312,9 @@ app.get("/api/external", checkApiJwt, (req, res) => {
   });
 });
 
+// ----------------------------
+// Admin order management
+// ----------------------------
 app.patch("/api/admin/orders/:orderId", checkApiJwt, async (req, res) => {
   const adminUserId = req.auth?.payload?.sub;
   const orderId = req.params.orderId;
@@ -1268,6 +1478,9 @@ app.delete("/api/admin/orders/:orderId", checkApiJwt, async (req, res) => {
   }
 });
 
+// ----------------------------
+// Static app hosting
+// ----------------------------
 // Serve i file statici di React
 app.use(express.static(path.join(__dirname, "build1")));
 

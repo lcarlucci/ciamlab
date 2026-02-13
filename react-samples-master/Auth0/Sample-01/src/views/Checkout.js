@@ -9,6 +9,15 @@ const Checkout = () => {
   const navigate = useNavigate();
   const { user, getAccessTokenSilently, getAccessTokenWithPopup } = useAuth0();
   const config = getConfig();
+
+  // Constants
+  const PAYMENT_METHODS = ["card", "paypal", "gpay", "applepay", "invoice"];
+  const PRICE_PER_ITEM = 12000;
+  const PHONE_COUNTRY_PREFIX = "+39";
+  const PHONE_E164_REGEX = /^\+\d{6,}$/;
+  const MFA_ACR = "http://schemas.openid.net/pape/policies/2007/06/multi-factor";
+
+  // Cart state
   const cart = location.state?.cart || [];
   const [storedCart, setStoredCart] = useState(() => {
     try {
@@ -22,14 +31,14 @@ const Checkout = () => {
   const [paymentMethod, setPaymentMethod] = useState(() => {
     try {
       const stored = localStorage.getItem("ciam_payment_method");
-      const allowed = ["card", "paypal", "gpay", "applepay", "invoice"];
-      return allowed.includes(stored) ? stored : "card";
+      return PAYMENT_METHODS.includes(stored) ? stored : PAYMENT_METHODS[0];
     } catch {
-      return "card";
+      return PAYMENT_METHODS[0];
     }
   });
 
-  const pricePerItem = 12000;
+  // Derived totals
+  const pricePerItem = PRICE_PER_ITEM;
   const subtotal = effectiveCart.length * pricePerItem;
   const formatter = new Intl.NumberFormat("it-IT", {
     style: "currency",
@@ -37,12 +46,9 @@ const Checkout = () => {
     maximumFractionDigits: 0,
   });
 
-  useEffect(() => {
-    localStorage.setItem("ciam_payment_method", paymentMethod);
-  }, [paymentMethod]);
-
   const showEnterpriseFields = paymentMethod === "invoice";
 
+  // Form state
   const [billing, setBilling] = useState({
     fullName: user?.name || "",
     email: user?.email || "",
@@ -77,59 +83,18 @@ const Checkout = () => {
   const [mfaChecked, setMfaChecked] = useState(false);
   const [mfaVerified, setMfaVerified] = useState(false);
 
-  useEffect(() => {
-    if (!user) return;
-    setBilling((prev) => ({
-      ...prev,
-      fullName: prev.fullName || user?.name || "",
-      email: prev.email || user?.email || "",
-      phone: prev.phone || user?.phone_number || "",
-    }));
-  }, [user]);
-
-  useEffect(() => {
-    if (!user) return;
-    let isMounted = true;
-
-    const loadRoles = async () => {
-      try {
-        const token = await getAccessTokenSilently({
-          authorizationParams: { audience: config.audience },
-        });
-        const apiBase = config.apiOrigin || window.location.origin;
-        const response = await fetch(`${apiBase}/api/user/roles`, {
-          headers: { authorization: `Bearer ${token}` },
-        });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(data?.message || "Unable to load roles.");
-        }
-        const roles = Array.isArray(data.roles) ? data.roles : [];
-        const requiresMfa = roles.some(
-          (role) => String(role || "").trim().toLowerCase() === "ciam demo mfa"
-        );
-        if (isMounted) {
-          setMfaRequired(requiresMfa);
-          setMfaChecked(true);
-        }
-      } catch {
-        if (isMounted) {
-          setMfaRequired(false);
-          setMfaChecked(true);
-        }
-      }
-    };
-
-    loadRoles();
-    return () => {
-      isMounted = false;
-    };
-  }, [user, getAccessTokenSilently, config.audience, config.apiOrigin]);
+  // Helpers
+  const normalizePhone = (value) => {
+    const raw = (value || "").trim();
+    if (!raw) return "";
+    const compact = raw.replace(/[^\d+]/g, "");
+    if (!compact) return "";
+    return compact.startsWith("+") ? compact : `${PHONE_COUNTRY_PREFIX}${compact}`;
+  };
 
   const validate = (phoneOverride) => {
     const nextErrors = {};
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const phoneRegex = /^\+\d{6,}$/;
     const vatRegex = /^(IT)?\d{11}$/i;
     const sdiRegex = /^[A-Za-z0-9]{7}$/;
 
@@ -137,7 +102,7 @@ const Checkout = () => {
     if (!emailRegex.test(billing.email || "")) nextErrors.email = "Valid email is required.";
     if (!billing.company.trim()) nextErrors.company = "Company is required.";
     const phoneToValidate = normalizePhone(phoneOverride || billing.phone);
-    if (!phoneRegex.test(phoneToValidate || "")) nextErrors.phone = "Valid phone is required.";
+    if (!PHONE_E164_REGEX.test(phoneToValidate || "")) nextErrors.phone = "Valid phone is required.";
     if (!billing.address.trim()) nextErrors.address = "Billing address is required.";
     if (!billing.city.trim()) nextErrors.city = "City is required.";
     if (!billing.country.trim()) nextErrors.country = "Country is required.";
@@ -155,18 +120,12 @@ const Checkout = () => {
       if (!emailRegex.test(invoice.pecEmail || "")) nextErrors.pecEmail = "Valid PEC email is required.";
       if (!sdiRegex.test(invoice.sdiCode || "")) nextErrors.sdiCode = "SDI code must be 7 characters.";
       if (!vatRegex.test(invoice.vatNumber || "")) nextErrors.vatNumber = "Valid VAT number is required.";
-      if (!emailRegex.test(invoice.billingContact || "")) nextErrors.billingContact = "Valid billing contact email is required.";
+      if (!emailRegex.test(invoice.billingContact || "")) {
+        nextErrors.billingContact = "Valid billing contact email is required.";
+      }
     }
 
     return nextErrors;
-  };
-
-  const normalizePhone = (value) => {
-    const raw = (value || "").trim();
-    if (!raw) return "";
-    const compact = raw.replace(/[^\d+]/g, "");
-    if (!compact) return "";
-    return compact.startsWith("+") ? compact : `+39${compact}`;
   };
 
   const fetchVerifiedPhoneProfile = async () => {
@@ -188,11 +147,12 @@ const Checkout = () => {
       phoneVerified: Boolean(data?.phone_verified),
     };
   };
+
   const enforceCheckoutMfa = async () => {
     const token = await getAccessTokenWithPopup({
       authorizationParams: {
         audience: config.audience,
-        acr_values: "http://schemas.openid.net/pape/policies/2007/06/multi-factor",
+        acr_values: MFA_ACR,
       },
     });
     return token;
@@ -257,6 +217,86 @@ const Checkout = () => {
     }
   };
 
+  // Effects
+  useEffect(() => {
+    localStorage.setItem("ciam_payment_method", paymentMethod);
+  }, [paymentMethod]);
+
+  useEffect(() => {
+    if (!user) return;
+    setBilling((prev) => ({
+      ...prev,
+      fullName: prev.fullName || user?.name || "",
+      email: prev.email || user?.email || "",
+      phone: prev.phone || user?.phone_number || "",
+    }));
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    let isMounted = true;
+
+    const loadProfilePhone = async () => {
+      try {
+        const profile = await fetchVerifiedPhoneProfile();
+        if (!isMounted) return;
+        if (profile.phoneNumber) {
+          setBilling((prev) => ({
+            ...prev,
+            phone: prev.phone || profile.phoneNumber,
+          }));
+        }
+      } catch {
+        // Best effort: keep current billing phone.
+      }
+    };
+
+    loadProfilePhone();
+    return () => {
+      isMounted = false;
+    };
+  }, [user, getAccessTokenSilently, config.audience, config.apiOrigin]);
+
+  useEffect(() => {
+    if (!user) return;
+    let isMounted = true;
+
+    const loadRoles = async () => {
+      try {
+        const token = await getAccessTokenSilently({
+          authorizationParams: { audience: config.audience },
+        });
+        const apiBase = config.apiOrigin || window.location.origin;
+        const response = await fetch(`${apiBase}/api/user/roles`, {
+          headers: { authorization: `Bearer ${token}` },
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data?.message || "Unable to load roles.");
+        }
+        const roles = Array.isArray(data.roles) ? data.roles : [];
+        const requiresMfa = roles.some(
+          (role) => String(role || "").trim().toLowerCase() === "ciam demo mfa"
+        );
+        if (isMounted) {
+          setMfaRequired(requiresMfa);
+          setMfaChecked(true);
+        }
+      } catch {
+        if (isMounted) {
+          setMfaRequired(false);
+          setMfaChecked(true);
+        }
+      }
+    };
+
+    loadRoles();
+    return () => {
+      isMounted = false;
+    };
+  }, [user, getAccessTokenSilently, config.audience, config.apiOrigin]);
+
+  // Handlers
   const handlePlaceOrder = async () => {
     let verifiedPhoneCandidate = "";
     let mfaTokenOverride = "";

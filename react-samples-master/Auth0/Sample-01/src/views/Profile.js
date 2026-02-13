@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth0, withAuthenticationRequired } from "@auth0/auth0-react";
 import Loading from "../components/Loading";
 import { getConfig } from "../config";
@@ -10,6 +10,7 @@ const PASSWORD_RESET_CONNECTION = "Username-Password-Authentication";
 
 export const ProfileComponent = () => {
   const { user, getAccessTokenSilently, getAccessTokenWithPopup } = useAuth0();
+  // State
   const [resetState, setResetState] = useState({ status: "idle", message: "" });
   const [editingField, setEditingField] = useState(null);
   const [fieldValues, setFieldValues] = useState({});
@@ -33,8 +34,24 @@ export const ProfileComponent = () => {
     authenticatorId: "",
     otp: "",
   });
+  const [toast, setToast] = useState(null);
+  const toastTimeoutRef = useRef(null);
+  const phoneCheckRef = useRef({
+    inFlight: false,
+    lastValue: "",
+    lastResult: null,
+    lastCheckedAt: 0,
+  });
+  // Config and constants
   const config = getConfig();
+  const MFA_SCOPE = "enroll read:authenticators remove:authenticators";
+  const MFA_ACR = "http://schemas.openid.net/pape/policies/2007/06/multi-factor";
+  const TOAST_TTL_MS = 4000;
+  const PHONE_CHECK_TTL_MS = 20000;
+  const PHONE_IN_USE_MESSAGE =
+    "Numero di telefono gia in uso per un altro account. Non e possibile utilizzare lo stesso numero.";
 
+  // Utilities
   const buildErrorMessage = (data, fallback) => {
     const base = data?.message || fallback;
     const details = data?.details || {};
@@ -49,6 +66,25 @@ export const ProfileComponent = () => {
     }
     return parts.length ? `${base} (${parts.join(" | ")})` : base;
   };
+
+  const showToast = (message, status = "info") => {
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+    setToast({ message, status });
+    toastTimeoutRef.current = setTimeout(() => {
+      setToast(null);
+      toastTimeoutRef.current = null;
+    }, TOAST_TTL_MS);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const normalizePhoneNumber = (value) => {
     const raw = (value || "").trim();
@@ -87,6 +123,7 @@ export const ProfileComponent = () => {
     });
   };
 
+  // User context
   const mockUser = {
     picture: process.env.PUBLIC_URL + "/assets/placeholder.png",
     name: "Test User",
@@ -102,6 +139,7 @@ export const ProfileComponent = () => {
   const email = currentUser?.email;
   const provider = currentUser?.sub?.split("|")[0];
   const isDbUser = provider === "auth0";
+  const isSocialUser = Boolean(provider) && provider !== "auth0" && provider !== "sms";
   const avatarSeed = currentUser?.name || currentUser?.email || "";
   const avatarInitial = getInitial(currentUser?.name, currentUser?.email);
   const avatarColor = getAvatarColor(avatarSeed);
@@ -133,6 +171,7 @@ export const ProfileComponent = () => {
     (field) => !columnOneKeys.includes(field.key)
   );
 
+  // Effects: initialize field values from user
   useEffect(() => {
     if (!currentUser) return;
     const nextValues = {};
@@ -148,6 +187,7 @@ export const ProfileComponent = () => {
     setFieldValues(nextValues);
   }, [currentUser, editableFields]);
 
+  // Effects: load profile metadata and roles
   useEffect(() => {
     if (!currentUser) return;
 
@@ -229,6 +269,75 @@ export const ProfileComponent = () => {
         : "To change your password, use your login provider settings."
     : "";
 
+  // Phone + MFA helpers
+  const openAuth0MfaSettings = () => {
+    const url = `https://${config.domain}/u/mfa`;
+    window.open(url, "auth0-mfa", "width=520,height=700");
+  };
+
+  const checkPhoneAvailability = async (phoneNumber) => {
+    const normalized = normalizePhoneNumber(phoneNumber);
+    if (!normalized) return { available: true, checked: false };
+    if (phoneCheckRef.current.inFlight && phoneCheckRef.current.lastValue === normalized) {
+      return { available: true, checked: false };
+    }
+    if (phoneSnapshotReady && normalized === phoneSnapshot.phoneNumber) {
+      return { available: true, checked: true };
+    }
+    if (
+      phoneCheckRef.current.lastValue === normalized &&
+      phoneCheckRef.current.lastResult &&
+      Date.now() - phoneCheckRef.current.lastCheckedAt < PHONE_CHECK_TTL_MS
+    ) {
+      return phoneCheckRef.current.lastResult;
+    }
+
+    phoneCheckRef.current.inFlight = true;
+    phoneCheckRef.current.lastValue = normalized;
+    try {
+      const token = await getAccessTokenSilently({
+        authorizationParams: { audience: config.audience },
+      });
+      const apiBase = config.apiOrigin || window.location.origin;
+      const response = await fetch(
+        `${apiBase}/api/user/phone-availability?phoneNumber=${encodeURIComponent(normalized)}`,
+        {
+          headers: { authorization: `Bearer ${token}` },
+        }
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        return { available: true, checked: false };
+      }
+      const result = {
+        available: data?.available !== false,
+        checked: Boolean(data?.checked),
+        message: data?.message || "",
+      };
+      phoneCheckRef.current.lastResult = result;
+      phoneCheckRef.current.lastCheckedAt = Date.now();
+      return result;
+    } catch {
+      return { available: true, checked: false };
+    } finally {
+      phoneCheckRef.current.inFlight = false;
+    }
+  };
+
+  const handlePhoneInUse = (message) => {
+    handleCancelEdit("phone_number");
+    setPhoneVerified(phoneSnapshot.phoneVerified);
+    showToast(message || PHONE_IN_USE_MESSAGE, "error");
+    setFieldStatus((prev) => ({
+      ...prev,
+      phone_number: {
+        status: "error",
+        message: message || "Phone number already in use.",
+      },
+    }));
+  };
+
+  // Profile actions
   const handlePasswordReset = async () => {
     if (!email) {
       setResetState({ status: "error", message: "User email not available." });
@@ -336,14 +445,15 @@ export const ProfileComponent = () => {
     }
   };
 
+  // MFA phone flow
   const requestPhoneMfaToken = async () => {
     setPhoneFlow((prev) => ({ ...prev, status: "loading", message: "" }));
     try {
       const mfaToken = await getAccessTokenWithPopup({
         authorizationParams: {
           audience: `https://${config.domain}/mfa/`,
-          scope: "enroll read:authenticators remove:authenticators",
-          acr_values: "http://schemas.openid.net/pape/policies/2007/06/multi-factor",
+          scope: MFA_SCOPE,
+          acr_values: MFA_ACR,
         },
       });
       setFieldStatus((prev) => {
@@ -391,7 +501,7 @@ export const ProfileComponent = () => {
       return;
     }
 
-    if (fieldKey === "phone_number") {
+    if (fieldKey === "phone_number" && !isSocialUser) {
       const token = await requestPhoneMfaToken();
       if (!token) return;
     }
@@ -436,6 +546,12 @@ export const ProfileComponent = () => {
         otp: "",
       });
       setPhoneVerified(false);
+      return;
+    }
+
+    const availability = await checkPhoneAvailability(phoneNumber);
+    if (availability.checked && !availability.available) {
+      handlePhoneInUse(availability.message || PHONE_IN_USE_MESSAGE);
       return;
     }
 
@@ -521,6 +637,10 @@ export const ProfileComponent = () => {
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
+        if (data?.code === "PHONE_IN_USE") {
+          handlePhoneInUse(data?.message);
+          return;
+        }
         throw new Error(buildErrorMessage(data, "OTP verification failed."));
       }
 
@@ -545,6 +665,7 @@ export const ProfileComponent = () => {
     }
   };
 
+  // Orders management (admin)
   const createOrderDraft = (order) => ({
     id: order.id,
     status: order.status || "Paid",
@@ -711,6 +832,25 @@ export const ProfileComponent = () => {
 
   return (
     <div className="profile-container">
+      {toast ? (
+        <div className={`profile-toast ${toast.status}`}>
+          <span>{toast.message}</span>
+          <button
+            className="toast-dismiss"
+            type="button"
+            aria-label="Dismiss notification"
+            onClick={() => {
+              if (toastTimeoutRef.current) {
+                clearTimeout(toastTimeoutRef.current);
+                toastTimeoutRef.current = null;
+              }
+              setToast(null);
+            }}
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
       <section className="profile-shell">
         <aside className="profile-card">
           <div
@@ -850,64 +990,98 @@ export const ProfileComponent = () => {
                             }}
                           />
                           {field.key === "phone_number" ? (
-                            <>
-                              <div className="field-edit-actions">
-                                <button
-                                  className="field-save-button"
-                                  onClick={startPhoneVerification}
-                                  disabled={phoneFlow.status === "loading"}
-                                  type="button"
-                                >
-                                  {phoneFlow.status === "loading"
-                                    ? "Sending..."
-                                    : phoneFlow.status === "code_sent"
-                                      ? "Resend OTP"
-                                      : "Send OTP"}
-                                </button>
-                                <button
-                                  className="field-cancel-button"
-                                  onClick={() => handleCancelEdit(field.key)}
-                                  type="button"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                              {phoneFlow.status === "code_sent" ||
-                              phoneFlow.status === "verifying" ||
-                              phoneFlow.status === "success" ||
-                              phoneFlow.status === "error" ? (
-                                <div className="field-otp">
-                                  <label>OTP code</label>
-                                  <input
-                                    className="field-input"
-                                    type="text"
-                                    value={phoneFlow.otp}
-                                    placeholder="123456"
-                                    onChange={(event) =>
-                                      setPhoneFlow((prev) => ({
-                                        ...prev,
-                                        otp: event.target.value.replace(/\D/g, ""),
-                                      }))
-                                    }
-                                  />
-                                  <div className="field-edit-actions">
-                                    <button
-                                      className="field-save-button"
-                                      onClick={verifyPhoneOtp}
-                                      disabled={phoneFlow.status === "verifying"}
-                                      type="button"
-                                    >
-                                      {phoneFlow.status === "verifying" ? "Verifying..." : "Verify"}
-                                    </button>
+                            isSocialUser ? (
+                              <>
+                                <div className="field-edit-actions">
+                                  <button
+                                    className="field-save-button"
+                                    onClick={() => handleFieldSave(field.key)}
+                                    disabled={status?.status === "loading"}
+                                    type="button"
+                                  >
+                                    {status?.status === "loading" ? "Saving..." : "Save"}
+                                  </button>
+                                  <button
+                                    className="field-cancel-button"
+                                    onClick={() => handleCancelEdit(field.key)}
+                                    type="button"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    className="field-cancel-button"
+                                    onClick={openAuth0MfaSettings}
+                                    type="button"
+                                  >
+                                    Manage MFA
+                                  </button>
+                                </div>
+                                <div className="field-note">
+                                  MFA factors are managed in Auth0 for social logins.
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="field-edit-actions">
+                                  <button
+                                    className="field-save-button"
+                                    onClick={startPhoneVerification}
+                                    disabled={phoneFlow.status === "loading"}
+                                    type="button"
+                                  >
+                                    {phoneFlow.status === "loading"
+                                      ? "Sending..."
+                                      : phoneFlow.status === "code_sent"
+                                        ? "Resend OTP"
+                                        : "Send OTP"}
+                                  </button>
+                                  <button
+                                    className="field-cancel-button"
+                                    onClick={() => handleCancelEdit(field.key)}
+                                    type="button"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                                {phoneFlow.status === "code_sent" ||
+                                phoneFlow.status === "verifying" ||
+                                phoneFlow.status === "success" ||
+                                phoneFlow.status === "error" ? (
+                                  <div className="field-otp">
+                                    <label>OTP code</label>
+                                    <input
+                                      className="field-input"
+                                      type="text"
+                                      value={phoneFlow.otp}
+                                      placeholder="123456"
+                                      onChange={(event) =>
+                                        setPhoneFlow((prev) => ({
+                                          ...prev,
+                                          otp: event.target.value.replace(/\D/g, ""),
+                                        }))
+                                      }
+                                    />
+                                    <div className="field-edit-actions">
+                                      <button
+                                        className="field-save-button"
+                                        onClick={verifyPhoneOtp}
+                                        disabled={phoneFlow.status === "verifying"}
+                                        type="button"
+                                      >
+                                        {phoneFlow.status === "verifying"
+                                          ? "Verifying..."
+                                          : "Verify"}
+                                      </button>
+                                    </div>
                                   </div>
-                                </div>
-                              ) : null}
-                              {phoneFlow.message ? (
-                                <div className={`field-status ${phoneFlow.status}`}>
-                                  {phoneFlow.message}
-                                </div>
-                              ) : null}
-                            </>
+                                ) : null}
+                                {phoneFlow.message ? (
+                                  <div className={`field-status ${phoneFlow.status}`}>
+                                    {phoneFlow.message}
+                                  </div>
+                                ) : null}
+                              </>
+                            )
                           ) : (
                             <div className="field-edit-actions">
                               <button
@@ -1543,3 +1717,5 @@ export const ProfileComponent = () => {
 export default withAuthenticationRequired(ProfileComponent, {
   onRedirecting: () => <Loading />,
 });
+
+
