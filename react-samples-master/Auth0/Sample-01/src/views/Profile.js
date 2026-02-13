@@ -35,6 +35,14 @@ export const ProfileComponent = () => {
     otp: "",
   });
   const [toast, setToast] = useState(null);
+  const [mfaManager, setMfaManager] = useState({
+    open: false,
+    loading: false,
+    token: "",
+    authenticators: [],
+    error: "",
+  });
+  const [mfaPhoneInput, setMfaPhoneInput] = useState("");
   const toastTimeoutRef = useRef(null);
   const phoneCheckRef = useRef({
     inFlight: false,
@@ -270,9 +278,112 @@ export const ProfileComponent = () => {
     : "";
 
   // Phone + MFA helpers
-  const openAuth0MfaSettings = () => {
-    const url = `https://${config.domain}/u/mfa`;
-    window.open(url, "auth0-mfa", "width=520,height=700");
+  const loadMfaAuthenticators = async (tokenOverride) => {
+    const token = tokenOverride || mfaManager.token || phoneFlow.mfaToken;
+    if (!token) {
+      setMfaManager((prev) => ({
+        ...prev,
+        loading: false,
+        error: "MFA token is required.",
+      }));
+      return;
+    }
+
+    setMfaManager((prev) => ({ ...prev, loading: true, error: "" }));
+    try {
+      const apiBase = config.apiOrigin || window.location.origin;
+      const response = await fetch(`${apiBase}/api/mfa/authenticators`, {
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.message || "Unable to load authenticators.");
+      }
+      const authenticators = Array.isArray(data?.authenticators)
+        ? data.authenticators
+        : [];
+      setMfaManager((prev) => ({
+        ...prev,
+        loading: false,
+        authenticators,
+      }));
+    } catch (err) {
+      setMfaManager((prev) => ({
+        ...prev,
+        loading: false,
+        error: err?.message || "Unable to load authenticators.",
+      }));
+    }
+  };
+
+  const openMfaManager = async () => {
+    setMfaManager((prev) => ({ ...prev, open: true, loading: true, error: "" }));
+    try {
+      const token = await getAccessTokenWithPopup({
+        authorizationParams: {
+          audience: `https://${config.domain}/mfa/`,
+          scope: MFA_SCOPE,
+          acr_values: MFA_ACR,
+        },
+      });
+      setMfaManager((prev) => ({ ...prev, token }));
+      setPhoneFlow((prev) => ({ ...prev, mfaToken: token }));
+      setMfaPhoneInput(
+        (value) =>
+          value ||
+          fieldValues.phone_number ||
+          phoneSnapshot.phoneNumber ||
+          ""
+      );
+      await loadMfaAuthenticators(token);
+    } catch (err) {
+      setMfaManager((prev) => ({
+        ...prev,
+        loading: false,
+        error: err?.message || "Unable to open MFA manager.",
+      }));
+    }
+  };
+
+  const closeMfaManager = () => {
+    setMfaManager((prev) => ({ ...prev, open: false, loading: false, error: "" }));
+    setPhoneFlow((prev) => ({
+      ...prev,
+      status: "idle",
+      message: "",
+      oobCode: "",
+      authenticatorId: "",
+      otp: "",
+    }));
+  };
+
+  const handleRemoveAuthenticator = async (authenticatorId) => {
+    if (!mfaManager.token) {
+      showToast("MFA token is required.", "error");
+      return;
+    }
+    setMfaManager((prev) => ({ ...prev, loading: true, error: "" }));
+    try {
+      const apiBase = config.apiOrigin || window.location.origin;
+      const response = await fetch(
+        `${apiBase}/api/mfa/authenticators/${encodeURIComponent(authenticatorId)}`,
+        {
+          method: "DELETE",
+          headers: { authorization: `Bearer ${mfaManager.token}` },
+        }
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.message || "Unable to remove authenticator.");
+      }
+      await loadMfaAuthenticators(mfaManager.token);
+    } catch (err) {
+      setMfaManager((prev) => ({
+        ...prev,
+        loading: false,
+        error: err?.message || "Unable to remove authenticator.",
+      }));
+    }
   };
 
   const checkPhoneAvailability = async (phoneNumber) => {
@@ -327,6 +438,9 @@ export const ProfileComponent = () => {
   const handlePhoneInUse = (message) => {
     handleCancelEdit("phone_number");
     setPhoneVerified(phoneSnapshot.phoneVerified);
+    if (mfaManager.open) {
+      setMfaPhoneInput(phoneSnapshot.phoneNumber || "");
+    }
     showToast(message || PHONE_IN_USE_MESSAGE, "error");
     setFieldStatus((prev) => ({
       ...prev,
@@ -534,8 +648,8 @@ export const ProfileComponent = () => {
     setFieldValues((prev) => ({ ...prev, phone_number: resolvedPhoneNumber }));
   };
 
-  const startPhoneVerification = async () => {
-    const rawInput = (fieldValues.phone_number || "").trim();
+  const startPhoneVerification = async (phoneOverride) => {
+    const rawInput = ((phoneOverride ?? fieldValues.phone_number) || "").trim();
     const phoneNumber = normalizePhoneNumber(rawInput);
     if (!phoneNumber) {
       setPhoneFlow({
@@ -568,7 +682,7 @@ export const ProfileComponent = () => {
     setPhoneVerified(false);
 
     try {
-      if (phoneNumber !== fieldValues.phone_number) {
+      if (phoneOverride === undefined && phoneNumber !== fieldValues.phone_number) {
         setFieldValues((prev) => ({ ...prev, phone_number: phoneNumber }));
       }
       const mfaToken = phoneFlow.mfaToken;
@@ -605,7 +719,7 @@ export const ProfileComponent = () => {
     }
   };
 
-  const verifyPhoneOtp = async () => {
+  const verifyPhoneOtp = async (phoneOverride) => {
     const otp = (phoneFlow.otp || "").replace(/\D/g, "");
     if (!otp) {
       setPhoneFlow((prev) => ({
@@ -619,6 +733,9 @@ export const ProfileComponent = () => {
     setPhoneFlow((prev) => ({ ...prev, status: "verifying", message: "" }));
 
     try {
+      const phoneNumber = normalizePhoneNumber(
+        (phoneOverride ?? fieldValues.phone_number) || ""
+      );
       const apiBase = config.apiOrigin || window.location.origin;
       const response = await fetch(`${apiBase}/api/mfa/verify-sms`, {
         method: "POST",
@@ -631,7 +748,7 @@ export const ProfileComponent = () => {
           oobCode: phoneFlow.oobCode,
           authenticatorId: phoneFlow.authenticatorId,
           otp,
-          phoneNumber: (fieldValues.phone_number || "").trim(),
+          phoneNumber,
         }),
       });
 
@@ -656,6 +773,9 @@ export const ProfileComponent = () => {
         message: "Phone number verified.",
       }));
       setEditingField(null);
+      if (mfaManager.open) {
+        await loadMfaAuthenticators();
+      }
     } catch (err) {
       setPhoneFlow((prev) => ({
         ...prev,
@@ -847,8 +967,128 @@ export const ProfileComponent = () => {
               setToast(null);
             }}
           >
-            ×
+            x
           </button>
+        </div>
+      ) : null}
+      {mfaManager.open ? (
+        <div className="profile-dialog-overlay" role="dialog" aria-modal="true">
+          <div className="profile-dialog">
+            <div className="dialog-header">
+              <h3>Manage MFA</h3>
+              <button
+                className="dialog-close"
+                type="button"
+                aria-label="Close"
+                onClick={closeMfaManager}
+              >
+                x
+              </button>
+            </div>
+            {mfaManager.error ? (
+              <div className="field-status error">{mfaManager.error}</div>
+            ) : null}
+
+            <div className="mfa-section">
+              <h4>Existing factors</h4>
+              {mfaManager.loading ? (
+                <div className="field-note">Loading authenticators...</div>
+              ) : mfaManager.authenticators.length ? (
+                <ul className="mfa-list">
+                  {mfaManager.authenticators.map((authenticator) => {
+                    const channel =
+                      authenticator?.oob_channel ||
+                      authenticator?.authenticator_type ||
+                      "sms";
+                    return (
+                      <li key={authenticator.id} className="mfa-item">
+                        <div className="mfa-info">
+                          <span className="mfa-type">{channel.toUpperCase()}</span>
+                          <span className="mfa-meta">
+                            {authenticator.name || authenticator.id}
+                          </span>
+                        </div>
+                        <button
+                          className="field-cancel-button"
+                          type="button"
+                          disabled={mfaManager.loading}
+                          onClick={() => handleRemoveAuthenticator(authenticator.id)}
+                        >
+                          Remove
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <div className="field-note">No MFA factors enrolled.</div>
+              )}
+            </div>
+
+            <div className="mfa-section">
+              <h4>Add SMS factor</h4>
+              <input
+                className="field-input"
+                type="text"
+                placeholder="+39 333 123 4567"
+                value={mfaPhoneInput}
+                onChange={(event) => setMfaPhoneInput(event.target.value)}
+              />
+              <div className="field-edit-actions">
+                <button
+                  className="field-save-button"
+                  type="button"
+                  disabled={phoneFlow.status === "loading" || mfaManager.loading}
+                  onClick={() => startPhoneVerification(mfaPhoneInput)}
+                >
+                  {phoneFlow.status === "loading" ? "Sending..." : "Send OTP"}
+                </button>
+                <button
+                  className="field-cancel-button"
+                  type="button"
+                  onClick={closeMfaManager}
+                >
+                  Close
+                </button>
+              </div>
+
+              {phoneFlow.status === "code_sent" ||
+              phoneFlow.status === "verifying" ||
+              phoneFlow.status === "success" ||
+              phoneFlow.status === "error" ? (
+                <div className="field-otp">
+                  <label>OTP code</label>
+                  <input
+                    className="field-input"
+                    type="text"
+                    value={phoneFlow.otp}
+                    placeholder="123456"
+                    onChange={(event) =>
+                      setPhoneFlow((prev) => ({
+                        ...prev,
+                        otp: event.target.value.replace(/\D/g, ""),
+                      }))
+                    }
+                  />
+                  <div className="field-edit-actions">
+                    <button
+                      className="field-save-button"
+                      onClick={() => verifyPhoneOtp(mfaPhoneInput)}
+                      disabled={phoneFlow.status === "verifying"}
+                      type="button"
+                    >
+                      {phoneFlow.status === "verifying" ? "Verifying..." : "Verify"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+              {phoneFlow.message ? (
+                <div className={`field-status ${phoneFlow.status}`}>
+                  {phoneFlow.message}
+                </div>
+              ) : null}
+            </div>
+          </div>
         </div>
       ) : null}
       <section className="profile-shell">
@@ -1010,7 +1250,7 @@ export const ProfileComponent = () => {
                                   </button>
                                   <button
                                     className="field-cancel-button"
-                                    onClick={openAuth0MfaSettings}
+                                    onClick={openMfaManager}
                                     type="button"
                                   >
                                     Manage MFA
@@ -1717,5 +1957,8 @@ export const ProfileComponent = () => {
 export default withAuthenticationRequired(ProfileComponent, {
   onRedirecting: () => <Loading />,
 });
+
+
+
 
 
