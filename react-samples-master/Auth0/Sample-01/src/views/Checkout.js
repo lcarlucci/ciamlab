@@ -129,14 +129,14 @@ const Checkout = () => {
   const validate = (phoneOverride) => {
     const nextErrors = {};
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const phoneRegex = /^[+]?[\d\s().-]{6,}$/;
+    const phoneRegex = /^\+\d{6,}$/;
     const vatRegex = /^(IT)?\d{11}$/i;
     const sdiRegex = /^[A-Za-z0-9]{7}$/;
 
     if (!billing.fullName.trim()) nextErrors.fullName = "Full name is required.";
     if (!emailRegex.test(billing.email || "")) nextErrors.email = "Valid email is required.";
     if (!billing.company.trim()) nextErrors.company = "Company is required.";
-    const phoneToValidate = phoneOverride || billing.phone;
+    const phoneToValidate = normalizePhone(phoneOverride || billing.phone);
     if (!phoneRegex.test(phoneToValidate || "")) nextErrors.phone = "Valid phone is required.";
     if (!billing.address.trim()) nextErrors.address = "Billing address is required.";
     if (!billing.city.trim()) nextErrors.city = "City is required.";
@@ -164,7 +164,8 @@ const Checkout = () => {
   const normalizePhone = (value) => {
     const raw = (value || "").trim();
     if (!raw) return "";
-    const compact = raw.replace(/\s+/g, "");
+    const compact = raw.replace(/[^\d+]/g, "");
+    if (!compact) return "";
     return compact.startsWith("+") ? compact : `+39${compact}`;
   };
 
@@ -191,7 +192,7 @@ const Checkout = () => {
     const token = await getAccessTokenWithPopup({
       authorizationParams: {
         audience: config.audience,
-        prompt: "login",
+        acr_values: "http://schemas.openid.net/pape/policies/2007/06/multi-factor",
       },
     });
     return token;
@@ -208,7 +209,7 @@ const Checkout = () => {
         }));
 
       const apiBase = config.apiOrigin || window.location.origin;
-      const phoneValue = phoneOverride || billing.phone;
+      const phoneValue = normalizePhone(phoneOverride || billing.phone);
       const order = {
         id: `ord_${Date.now()}`,
         createdAt: new Date().toISOString(),
@@ -273,7 +274,12 @@ const Checkout = () => {
       }
     }
 
-    const nextErrors = validate(verifiedPhoneCandidate);
+    const normalizedPhone = normalizePhone(billing.phone);
+    if (normalizedPhone && normalizedPhone !== billing.phone) {
+      setBilling((prev) => ({ ...prev, phone: normalizedPhone }));
+    }
+
+    const nextErrors = validate(verifiedPhoneCandidate || normalizedPhone);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
       setSubmitState({ status: "error", message: "Please fix the highlighted fields." });
@@ -367,6 +373,12 @@ const Checkout = () => {
                   setBilling((prev) => ({ ...prev, phone: nextValue }));
                   if (mfaRequired) {
                     setMfaVerified(false);
+                  }
+                }}
+                onBlur={() => {
+                  const normalized = normalizePhone(billing.phone);
+                  if (normalized && normalized !== billing.phone) {
+                    setBilling((prev) => ({ ...prev, phone: normalized }));
                   }
                 }}
               />

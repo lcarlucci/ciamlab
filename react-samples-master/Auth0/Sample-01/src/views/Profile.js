@@ -50,6 +50,14 @@ export const ProfileComponent = () => {
     return parts.length ? `${base} (${parts.join(" | ")})` : base;
   };
 
+  const normalizePhoneNumber = (value) => {
+    const raw = (value || "").trim();
+    if (!raw) return "";
+    const compact = raw.replace(/[^\d+]/g, "");
+    if (!compact) return "";
+    return compact.startsWith("+") ? compact : `+39${compact}`;
+  };
+
   const decodeJwtPayload = (token) => {
     if (!token) return null;
     const parts = token.split(".");
@@ -328,6 +336,69 @@ export const ProfileComponent = () => {
     }
   };
 
+  const requestPhoneMfaToken = async () => {
+    setPhoneFlow((prev) => ({ ...prev, status: "loading", message: "" }));
+    try {
+      const mfaToken = await getAccessTokenWithPopup({
+        authorizationParams: {
+          audience: `https://${config.domain}/mfa/`,
+          scope: "enroll read:authenticators remove:authenticators",
+          acr_values: "http://schemas.openid.net/pape/policies/2007/06/multi-factor",
+        },
+      });
+      setFieldStatus((prev) => {
+        if (!prev.phone_number) return prev;
+        const next = { ...prev };
+        delete next.phone_number;
+        return next;
+      });
+      setPhoneFlow((prev) => ({
+        ...prev,
+        status: "idle",
+        message: "",
+        mfaToken,
+        oobCode: "",
+        authenticatorId: "",
+        otp: "",
+      }));
+      return mfaToken;
+    } catch (err) {
+      const message = err?.message || "MFA required to edit phone number.";
+      setFieldStatus((prev) => ({
+        ...prev,
+        phone_number: {
+          status: "error",
+          message,
+        },
+      }));
+      setPhoneFlow((prev) => ({
+        ...prev,
+        status: "error",
+        message,
+        mfaToken: "",
+      }));
+      return "";
+    }
+  };
+
+  const handleEditToggle = async (fieldKey, isEditing) => {
+    if (isEditing) {
+      if (fieldKey === "phone_number") {
+        handleCancelEdit(fieldKey);
+      } else {
+        setEditingField(null);
+      }
+      return;
+    }
+
+    if (fieldKey === "phone_number") {
+      const token = await requestPhoneMfaToken();
+      if (!token) return;
+    }
+
+    setEditingField(fieldKey);
+  };
+
   const refreshPhoneProfile = async () => {
     const token = await getAccessTokenSilently({
       authorizationParams: { audience: config.audience },
@@ -355,10 +426,7 @@ export const ProfileComponent = () => {
 
   const startPhoneVerification = async () => {
     const rawInput = (fieldValues.phone_number || "").trim();
-    const normalizedInput = rawInput.replace(/\s+/g, "");
-    const phoneNumber = normalizedInput.startsWith("+")
-      ? normalizedInput
-      : `+39${normalizedInput}`;
+    const phoneNumber = normalizePhoneNumber(rawInput);
     if (!phoneNumber) {
       setPhoneFlow({
         status: "error",
@@ -371,6 +439,15 @@ export const ProfileComponent = () => {
       return;
     }
 
+    if (!phoneFlow.mfaToken) {
+      setPhoneFlow((prev) => ({
+        ...prev,
+        status: "error",
+        message: "MFA verification is required before sending OTP.",
+      }));
+      return;
+    }
+
     setPhoneFlow((prev) => ({ ...prev, status: "loading", message: "" }));
     setPhoneVerified(false);
 
@@ -378,22 +455,7 @@ export const ProfileComponent = () => {
       if (phoneNumber !== fieldValues.phone_number) {
         setFieldValues((prev) => ({ ...prev, phone_number: phoneNumber }));
       }
-      let mfaToken = "";
-      try {
-        mfaToken = await getAccessTokenSilently({
-          authorizationParams: {
-            audience: `https://${config.domain}/mfa/`,
-            scope: "enroll read:authenticators remove:authenticators",
-          },
-        });
-      } catch {
-        mfaToken = await getAccessTokenWithPopup({
-          authorizationParams: {
-            audience: `https://${config.domain}/mfa/`,
-            scope: "enroll read:authenticators remove:authenticators",
-          },
-        });
-      }
+      const mfaToken = phoneFlow.mfaToken;
 
       const apiBase = config.apiOrigin || window.location.origin;
       const response = await fetch(`${apiBase}/api/mfa/enroll-sms`, {
@@ -733,9 +795,7 @@ export const ProfileComponent = () => {
                         </div>
                       <button
                         className="field-edit-button icon-only"
-                        onClick={() =>
-                          setEditingField(isEditing ? null : field.key)
-                        }
+                        onClick={() => handleEditToggle(field.key, isEditing)}
                         aria-label="Edit"
                         type="button"
                       >
@@ -771,6 +831,21 @@ export const ProfileComponent = () => {
                               }));
                               if (field.key === "phone_number") {
                                 setPhoneVerified(false);
+                              }
+                            }}
+                            onBlur={() => {
+                              if (field.key !== "phone_number") return;
+                              const normalized = normalizePhoneNumber(
+                                fieldValues.phone_number
+                              );
+                              if (
+                                normalized &&
+                                normalized !== fieldValues.phone_number
+                              ) {
+                                setFieldValues((prev) => ({
+                                  ...prev,
+                                  phone_number: normalized,
+                                }));
                               }
                             }}
                           />
