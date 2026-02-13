@@ -844,12 +844,6 @@ app.get("/api/admin/overview", checkApiJwt, async (req, res) => {
 // ----------------------------
 // MFA endpoints
 // ----------------------------
-function getBearerToken(req) {
-  const header = req.headers?.authorization || "";
-  const match = header.match(/^Bearer\s+(.+)$/i);
-  return match ? match[1] : "";
-}
-
 app.post("/api/mfa/enroll-sms", checkMfaJwt, async (req, res) => {
   const userId = req.auth?.payload?.sub;
   const phoneNumberRaw = (req.body?.phoneNumber || "").trim();
@@ -974,76 +968,6 @@ app.post("/api/mfa/enroll-sms", checkMfaJwt, async (req, res) => {
 
     const authenticatorId = data?.authenticator_id || data?.authenticatorId || "";
     return res.json({ oobCode: data?.oob_code, authenticatorId, allowRemoveOld });
-  } catch (error) {
-    return res.status(500).json({ message: error?.message || "Server error." });
-  }
-});
-
-app.get("/api/mfa/authenticators", checkMfaJwt, async (req, res) => {
-  const mfaToken = getBearerToken(req);
-  if (!mfaToken) {
-    return res.status(400).json({ message: "MFA token is required." });
-  }
-
-  try {
-    const response = await fetch(`https://${authConfig.domain}/mfa/authenticators`, {
-      headers: {
-        authorization: `Bearer ${mfaToken}`,
-      },
-    });
-
-    const data = await response.json().catch(() => ([]));
-    if (!response.ok) {
-      return res.status(response.status).json({
-        message:
-          data?.error_description ||
-          data?.message ||
-          "Unable to load authenticators.",
-        details: data,
-      });
-    }
-
-    return res.json({ authenticators: Array.isArray(data) ? data : [] });
-  } catch (error) {
-    return res.status(500).json({ message: error?.message || "Server error." });
-  }
-});
-
-app.delete("/api/mfa/authenticators/:id", checkMfaJwt, async (req, res) => {
-  const mfaToken = getBearerToken(req);
-  const authenticatorId = req.params.id;
-
-  if (!mfaToken) {
-    return res.status(400).json({ message: "MFA token is required." });
-  }
-
-  if (!authenticatorId) {
-    return res.status(400).json({ message: "Authenticator id is required." });
-  }
-
-  try {
-    const response = await fetch(
-      `https://${authConfig.domain}/mfa/authenticators/${encodeURIComponent(authenticatorId)}`,
-      {
-        method: "DELETE",
-        headers: {
-          authorization: `Bearer ${mfaToken}`,
-        },
-      }
-    );
-
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      return res.status(response.status).json({
-        message:
-          data?.error_description ||
-          data?.message ||
-          "Unable to delete authenticator.",
-        details: data,
-      });
-    }
-
-    return res.json({ message: "Authenticator removed." });
   } catch (error) {
     return res.status(500).json({ message: error?.message || "Server error." });
   }
