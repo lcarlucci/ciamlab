@@ -32,29 +32,16 @@ export const ProfileComponent = () => {
     mfaToken: "",
     oobCode: "",
     authenticatorId: "",
-    otp: "",
-    mode: "new",
-    channel: "guardian",
-    pendingPhoneNumber: "",
   });
   const [toast, setToast] = useState(null);
   const [requiresPhoneMfa, setRequiresPhoneMfa] = useState(false);
   const [phoneEditUnlocked, setPhoneEditUnlocked] = useState(false);
   const toastTimeoutRef = useRef(null);
-  const phoneCheckRef = useRef({
-    inFlight: false,
-    lastValue: "",
-    lastResult: null,
-    lastCheckedAt: 0,
-  });
   // Config and constants
   const config = getConfig();
   const MFA_SCOPE = "enroll read:authenticators remove:authenticators";
   const MFA_ACR = "http://schemas.openid.net/pape/policies/2007/06/multi-factor";
   const TOAST_TTL_MS = 4000;
-  const PHONE_CHECK_TTL_MS = 20000;
-  const PHONE_IN_USE_MESSAGE =
-    "Numero di telefono gia in uso per un altro account. Non e possibile utilizzare lo stesso numero.";
 
   // Utilities
   const buildErrorMessage = (data, fallback) => {
@@ -176,7 +163,6 @@ export const ProfileComponent = () => {
   const email = currentUser?.email;
   const provider = currentUser?.sub?.split("|")[0];
   const isDbUser = provider === "auth0";
-  const isSocialUser = Boolean(provider) && provider !== "auth0" && provider !== "sms";
   const avatarSeed = currentUser?.name || currentUser?.email || "";
   const avatarInitial = getInitial(currentUser?.name, currentUser?.email);
   const avatarColor = getAvatarColor(avatarSeed);
@@ -311,71 +297,7 @@ export const ProfileComponent = () => {
         : "To change your password, use your login provider settings."
     : "";
 
-  const shouldUseOtpFlow = !isSocialUser || requiresPhoneMfa;
-  const requiresOldPhoneOtp =
-    shouldUseOtpFlow && phoneSnapshotReady && phoneSnapshot.phoneNumber;
-
-  const checkPhoneAvailability = async (phoneNumber) => {
-    const normalized = normalizePhoneNumber(phoneNumber);
-    if (!normalized) return { available: true, checked: false };
-    if (phoneCheckRef.current.inFlight && phoneCheckRef.current.lastValue === normalized) {
-      return { available: true, checked: false };
-    }
-    if (phoneSnapshotReady && normalized === phoneSnapshot.phoneNumber) {
-      return { available: true, checked: true };
-    }
-    if (
-      phoneCheckRef.current.lastValue === normalized &&
-      phoneCheckRef.current.lastResult &&
-      Date.now() - phoneCheckRef.current.lastCheckedAt < PHONE_CHECK_TTL_MS
-    ) {
-      return phoneCheckRef.current.lastResult;
-    }
-
-    phoneCheckRef.current.inFlight = true;
-    phoneCheckRef.current.lastValue = normalized;
-    try {
-      const token = await getAccessTokenSilently({
-        authorizationParams: { audience: config.audience },
-      });
-      const apiBase = config.apiOrigin || window.location.origin;
-      const response = await fetch(
-        `${apiBase}/api/user/phone-availability?phoneNumber=${encodeURIComponent(normalized)}`,
-        {
-          headers: { authorization: `Bearer ${token}` },
-        }
-      );
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        return { available: true, checked: false };
-      }
-      const result = {
-        available: data?.available !== false,
-        checked: Boolean(data?.checked),
-        message: data?.message || "",
-      };
-      phoneCheckRef.current.lastResult = result;
-      phoneCheckRef.current.lastCheckedAt = Date.now();
-      return result;
-    } catch {
-      return { available: true, checked: false };
-    } finally {
-      phoneCheckRef.current.inFlight = false;
-    }
-  };
-
-  const handlePhoneInUse = (message) => {
-    handleCancelEdit("phone_number");
-    setPhoneVerified(phoneSnapshot.phoneVerified);
-    showToast(message || PHONE_IN_USE_MESSAGE, "error");
-    setFieldStatus((prev) => ({
-      ...prev,
-      phone_number: {
-        status: "error",
-        message: message || "Phone number already in use.",
-      },
-    }));
-  };
+  const requiresGuardianForPhone = requiresPhoneMfa;
 
   // Profile actions
   const handlePasswordReset = async () => {
@@ -450,6 +372,26 @@ export const ProfileComponent = () => {
         ...prev,
         [fieldKey]: { status: "success", message: "Updated." },
       }));
+      if (fieldKey === "phone_number") {
+        try {
+          await refreshPhoneProfile();
+        } catch {
+          setPhoneVerified(false);
+          setPhoneSnapshot((prev) => ({
+            ...prev,
+            phoneNumber: value,
+            phoneVerified: false,
+          }));
+        }
+        setPhoneFlow({
+          status: "idle",
+          message: "",
+          mfaToken: "",
+          oobCode: "",
+          authenticatorId: "",
+        });
+        setPhoneEditUnlocked(false);
+      }
       setEditingField(null);
     } catch (err) {
       setFieldStatus((prev) => ({
@@ -479,10 +421,6 @@ export const ProfileComponent = () => {
         mfaToken: "",
         oobCode: "",
         authenticatorId: "",
-        otp: "",
-        mode: "new",
-        channel: "guardian",
-        pendingPhoneNumber: "",
       });
       setPhoneVerified(phoneSnapshot.phoneVerified);
       setPhoneEditUnlocked(false);
@@ -513,10 +451,6 @@ export const ProfileComponent = () => {
         mfaToken,
         oobCode: "",
         authenticatorId: "",
-        otp: "",
-        mode: "new",
-        channel: "guardian",
-        pendingPhoneNumber: "",
       }));
       return mfaToken;
     } catch (err) {
@@ -549,11 +483,22 @@ export const ProfileComponent = () => {
     }
 
     if (fieldKey === "phone_number") {
-      setPhoneEditUnlocked(false);
-      if (!isSocialUser || requiresPhoneMfa) {
+      if (requiresGuardianForPhone) {
+        setPhoneEditUnlocked(false);
         const token = await requestPhoneMfaToken();
         if (!token) return;
+        setEditingField(fieldKey);
+        await startGuardianChallenge(token);
+        return;
       }
+      setPhoneFlow({
+        status: "idle",
+        message: "",
+        mfaToken: "",
+        oobCode: "",
+        authenticatorId: "",
+      });
+      setPhoneEditUnlocked(true);
     }
 
     setEditingField(fieldKey);
@@ -584,59 +529,20 @@ export const ProfileComponent = () => {
     setFieldValues((prev) => ({ ...prev, phone_number: resolvedPhoneNumber }));
   };
 
-  const startPhoneVerification = async (options = {}) => {
-    const { phoneNumberOverride, mode = "new", updateField = true } = options;
-    const rawInput = ((phoneNumberOverride ?? fieldValues.phone_number) || "").trim();
-    const phoneNumber = normalizePhoneNumber(rawInput);
-    if (!phoneNumber) {
-      setPhoneFlow({
-        status: "error",
-        message: "Phone number is required.",
-        mfaToken: phoneFlow.mfaToken,
-        oobCode: "",
-        authenticatorId: "",
-        otp: "",
-        mode,
-        channel: "guardian",
-        pendingPhoneNumber: "",
-      });
-      setPhoneVerified(false);
-      return;
-    }
-
-    if (mode !== "old") {
-      const availability = await checkPhoneAvailability(phoneNumber);
-      if (availability.checked && !availability.available) {
-        handlePhoneInUse(availability.message || PHONE_IN_USE_MESSAGE);
-        return;
-      }
-    }
-
-    if (!phoneFlow.mfaToken) {
+  const startGuardianChallenge = async (tokenOverride) => {
+    const mfaToken = tokenOverride || phoneFlow.mfaToken;
+    if (!mfaToken) {
       setPhoneFlow((prev) => ({
         ...prev,
         status: "error",
         message: "MFA verification is required before sending the push request.",
       }));
-      return;
+      return false;
     }
 
-    setPhoneFlow((prev) => ({
-      ...prev,
-      status: "loading",
-      message: "",
-      mode,
-      pendingPhoneNumber: phoneNumber,
-      channel: "guardian",
-    }));
-    setPhoneVerified(false);
+    setPhoneFlow((prev) => ({ ...prev, status: "loading", message: "" }));
 
     try {
-      if (updateField && phoneNumber !== fieldValues.phone_number) {
-        setFieldValues((prev) => ({ ...prev, phone_number: phoneNumber }));
-      }
-      const mfaToken = phoneFlow.mfaToken;
-
       const apiBase = config.apiOrigin || window.location.origin;
       const response = await fetch(`${apiBase}/api/mfa/guardian/challenge`, {
         method: "POST",
@@ -655,33 +561,27 @@ export const ProfileComponent = () => {
         throw new Error(buildErrorMessage(data, "Unable to send Guardian push."));
       }
 
-      const successMessage =
-        mode === "old"
-          ? "Notifica inviata per verificare il numero attuale. Approva su Guardian e poi clicca Verifica."
-          : "Notifica inviata su Auth0 Guardian. Approva e poi clicca Verifica.";
-      setPhoneFlow({
-        status: "code_sent",
-        message: successMessage,
+      setPhoneFlow((prev) => ({
+        ...prev,
+        status: "pending",
+        message:
+          "Approva la notifica su Auth0 Guardian per sbloccare la modifica del numero.",
         mfaToken,
         oobCode: data?.oobCode || "",
         authenticatorId: data?.authenticatorId || "",
-        otp: "",
-        mode,
-        channel: "guardian",
-        pendingPhoneNumber: phoneNumber,
-      });
+      }));
+      return true;
     } catch (err) {
       setPhoneFlow((prev) => ({
         ...prev,
         status: "error",
         message: err?.message || "Unable to send Guardian push.",
-        mode,
       }));
+      return false;
     }
   };
 
-  const verifyPhoneOtp = async (options = {}) => {
-    const { phoneNumberOverride } = options;
+  const verifyGuardianApproval = async () => {
     if (!phoneFlow.oobCode) {
       setPhoneFlow((prev) => ({
         ...prev,
@@ -694,18 +594,6 @@ export const ProfileComponent = () => {
     setPhoneFlow((prev) => ({ ...prev, status: "verifying", message: "" }));
 
     try {
-      const shouldUpdatePhone = phoneFlow.mode !== "old";
-      const resolvedNumber =
-        phoneNumberOverride ?? phoneFlow.pendingPhoneNumber ?? fieldValues.phone_number;
-      const phoneNumber = normalizePhoneNumber((resolvedNumber || "").trim());
-      if (shouldUpdatePhone && !phoneNumber) {
-        setPhoneFlow((prev) => ({
-          ...prev,
-          status: "error",
-          message: "Phone number is required.",
-        }));
-        return;
-      }
       const apiBase = config.apiOrigin || window.location.origin;
       const response = await fetch(`${apiBase}/api/mfa/guardian/verify`, {
         method: "POST",
@@ -717,17 +605,12 @@ export const ProfileComponent = () => {
           mfaToken: phoneFlow.mfaToken,
           oobCode: phoneFlow.oobCode,
           authenticatorId: phoneFlow.authenticatorId,
-          updatePhone: shouldUpdatePhone,
-          ...(shouldUpdatePhone ? { phoneNumber } : {}),
+          updatePhone: false,
         }),
       });
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        if (data?.code === "PHONE_IN_USE") {
-          handlePhoneInUse(data?.message);
-          return;
-        }
         if (data?.code === "GUARDIAN_NOT_ENROLLED") {
           handleGuardianNotEnrolled(data?.message);
           return;
@@ -735,7 +618,7 @@ export const ProfileComponent = () => {
         if (data?.code === "AUTH_PENDING") {
           setPhoneFlow((prev) => ({
             ...prev,
-            status: "code_sent",
+            status: "pending",
             message:
               data?.message ||
               "Approva la notifica su Auth0 Guardian e poi clicca Verifica.",
@@ -745,30 +628,12 @@ export const ProfileComponent = () => {
         throw new Error(buildErrorMessage(data, "Guardian verification failed."));
       }
 
-      if (phoneFlow.mode === "old") {
-        setPhoneEditUnlocked(true);
-        setPhoneFlow((prev) => ({
-          ...prev,
-          status: "success",
-          message: "Numero attuale verificato. Ora puoi modificare il numero.",
-          otp: "",
-        }));
-        return;
-      }
-
-      try {
-        await refreshPhoneProfile();
-      } catch {
-        setPhoneVerified(true);
-      }
-
+      setPhoneEditUnlocked(true);
       setPhoneFlow((prev) => ({
         ...prev,
         status: "success",
-        message: "Phone number verified.",
+        message: "Autorizzazione completata. Ora puoi modificare il numero.",
       }));
-      setEditingField(null);
-      setPhoneEditUnlocked(false);
     } catch (err) {
       setPhoneFlow((prev) => ({
         ...prev,
@@ -1011,21 +876,9 @@ export const ProfileComponent = () => {
                   const isEditing = editingField === field.key;
                   const value = fieldValues[field.key] || "";
                   const trimmedPhone = value.trim();
-                  const showPhoneBadge =
-                    field.key === "phone_number" &&
-                    (phoneVerified ||
-                      phoneFlow.status !== "idle" ||
-                      (isEditing && !trimmedPhone));
-                  const phoneBadgeTone = phoneVerified
-                    ? "verified"
-                    : phoneFlow.status === "code_sent" || phoneFlow.status === "verifying"
-                      ? "pending"
-                      : "unverified";
-                  const phoneBadgeLabel = phoneVerified
-                    ? "Verified"
-                    : phoneFlow.status === "code_sent" || phoneFlow.status === "verifying"
-                      ? "Verification pending"
-                      : "Not verified";
+                  const showPhoneBadge = field.key === "phone_number" && phoneVerified;
+                  const phoneBadgeTone = "verified";
+                  const phoneBadgeLabel = "Verified";
 
                   return (
                     <div key={field.key} className="profile-field compact">
@@ -1078,7 +931,7 @@ export const ProfileComponent = () => {
                             placeholder={field.placeholder}
                             disabled={
                               field.key === "phone_number" &&
-                              requiresOldPhoneOtp &&
+                              requiresGuardianForPhone &&
                               !phoneEditUnlocked
                             }
                             onChange={(event) => {
@@ -1108,30 +961,37 @@ export const ProfileComponent = () => {
                             }}
                           />
                           {field.key === "phone_number" ? (
-                            shouldUseOtpFlow ? (
-                              requiresOldPhoneOtp && !phoneEditUnlocked ? (
+                            requiresGuardianForPhone ? (
+                              !phoneEditUnlocked ? (
                                 <>
                                   <div className="field-note">
-                                    Verify your current phone number to update it.
+                                    Approva la notifica su Auth0 Guardian per sbloccare la
+                                    modifica del numero.
                                   </div>
                                   <div className="field-edit-actions">
                                     <button
                                       className="field-save-button"
-                                      onClick={() =>
-                                        startPhoneVerification({
-                                          phoneNumberOverride: phoneSnapshot.phoneNumber,
-                                          mode: "old",
-                                          updateField: false,
-                                        })
+                                      onClick={verifyGuardianApproval}
+                                      disabled={
+                                        phoneFlow.status === "verifying" ||
+                                        phoneFlow.status === "loading" ||
+                                        !phoneFlow.oobCode
                                       }
+                                      type="button"
+                                    >
+                                      {phoneFlow.status === "verifying"
+                                        ? "Verifying..."
+                                        : "Verify"}
+                                    </button>
+                                    <button
+                                      className="field-cancel-button"
+                                      onClick={() => startGuardianChallenge()}
                                       disabled={phoneFlow.status === "loading"}
                                       type="button"
                                     >
                                       {phoneFlow.status === "loading"
                                         ? "Sending..."
-                                        : phoneFlow.status === "code_sent"
-                                          ? "Resend Push"
-                                          : "Send Push"}
+                                        : "Resend Push"}
                                     </button>
                                     <button
                                       className="field-cancel-button"
@@ -1141,98 +1001,30 @@ export const ProfileComponent = () => {
                                       Cancel
                                     </button>
                                   </div>
-                                  {phoneFlow.mode === "old" &&
-                                  (phoneFlow.status === "code_sent" ||
-                                    phoneFlow.status === "verifying" ||
-                                    phoneFlow.status === "success" ||
-                                    phoneFlow.status === "error") ? (
-                                    <div className="field-otp">
-                                      <div className="field-note">
-                                        Approva la notifica su Auth0 Guardian e poi clicca
-                                        Verifica.
-                                      </div>
-                                      <div className="field-edit-actions">
-                                        <button
-                                          className="field-save-button"
-                                          onClick={() =>
-                                            verifyPhoneOtp({
-                                              phoneNumberOverride: phoneSnapshot.phoneNumber,
-                                            })
-                                          }
-                                          disabled={phoneFlow.status === "verifying"}
-                                          type="button"
-                                        >
-                                          {phoneFlow.status === "verifying"
-                                            ? "Verifying..."
-                                            : "Verify"}
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ) : null}
-                                  {phoneFlow.mode === "old" && phoneFlow.message ? (
+                                  {phoneFlow.message ? (
                                     <div className={`field-status ${phoneFlow.status}`}>
                                       {phoneFlow.message}
                                     </div>
                                   ) : null}
                                 </>
                               ) : (
-                                <>
-                                  <div className="field-edit-actions">
-                                    <button
-                                      className="field-save-button"
-                                      onClick={() =>
-                                        startPhoneVerification({
-                                          mode: "new",
-                                          updateField: true,
-                                        })
-                                      }
-                                      disabled={phoneFlow.status === "loading"}
-                                      type="button"
-                                    >
-                                      {phoneFlow.status === "loading"
-                                        ? "Sending..."
-                                        : phoneFlow.status === "code_sent"
-                                          ? "Resend Push"
-                                          : "Send Push"}
-                                    </button>
-                                    <button
-                                      className="field-cancel-button"
-                                      onClick={() => handleCancelEdit(field.key)}
-                                      type="button"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                  {phoneFlow.mode !== "old" &&
-                                  (phoneFlow.status === "code_sent" ||
-                                    phoneFlow.status === "verifying" ||
-                                    phoneFlow.status === "success" ||
-                                    phoneFlow.status === "error") ? (
-                                    <div className="field-otp">
-                                      <div className="field-note">
-                                        Approva la notifica su Auth0 Guardian e poi clicca
-                                        Verifica.
-                                      </div>
-                                      <div className="field-edit-actions">
-                                        <button
-                                          className="field-save-button"
-                                          onClick={verifyPhoneOtp}
-                                          disabled={phoneFlow.status === "verifying"}
-                                          type="button"
-                                        >
-                                          {phoneFlow.status === "verifying"
-                                            ? "Verifying..."
-                                            : "Verify"}
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ) : null}
-                                  {phoneFlow.mode !== "old" && phoneFlow.message ? (
-                                    <div className={`field-status ${phoneFlow.status}`}>
-                                      {phoneFlow.message}
-                                    </div>
-                                  ) : null}
-                                </>
+                                <div className="field-edit-actions">
+                                  <button
+                                    className="field-save-button"
+                                    onClick={() => handleFieldSave(field.key)}
+                                    disabled={status?.status === "loading"}
+                                    type="button"
+                                  >
+                                    {status?.status === "loading" ? "Saving..." : "Save"}
+                                  </button>
+                                  <button
+                                    className="field-cancel-button"
+                                    onClick={() => handleCancelEdit(field.key)}
+                                    type="button"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
                               )
                             ) : (
                               <div className="field-edit-actions">

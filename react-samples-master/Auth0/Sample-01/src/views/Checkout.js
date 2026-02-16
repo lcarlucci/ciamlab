@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
 import { getConfig } from "../config";
@@ -16,6 +16,9 @@ const Checkout = () => {
   const PHONE_COUNTRY_PREFIX = "+39";
   const PHONE_E164_REGEX = /^\+\d{6,}$/;
   const MFA_ACR = "http://schemas.openid.net/pape/policies/2007/06/multi-factor";
+  const MFA_SCOPE = "enroll read:authenticators remove:authenticators";
+  const GUARDIAN_POLL_INTERVAL_MS = 2500;
+  const GUARDIAN_POLL_MAX_ATTEMPTS = 24;
 
   // Cart state
   const cart = location.state?.cart || [];
@@ -81,7 +84,18 @@ const Checkout = () => {
   const [lastOrder, setLastOrder] = useState(null);
   const [mfaRequired, setMfaRequired] = useState(false);
   const [mfaChecked, setMfaChecked] = useState(false);
-  const [mfaVerified, setMfaVerified] = useState(false);
+  const [guardianFlow, setGuardianFlow] = useState({
+    status: "idle",
+    message: "",
+    mfaToken: "",
+    oobCode: "",
+    authenticatorId: "",
+  });
+  const guardianPollRef = useRef(null);
+  const guardianAttemptsRef = useRef(0);
+  const pendingOrderRef = useRef(null);
+  const submittingRef = useRef(false);
+  const isMountedRef = useRef(true);
 
   // Helpers
   const normalizePhone = (value) => {
@@ -92,7 +106,7 @@ const Checkout = () => {
     return compact.startsWith("+") ? compact : `${PHONE_COUNTRY_PREFIX}${compact}`;
   };
 
-  const validate = (phoneOverride) => {
+  const validate = () => {
     const nextErrors = {};
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const vatRegex = /^(IT)?\d{11}$/i;
@@ -101,7 +115,7 @@ const Checkout = () => {
     if (!billing.fullName.trim()) nextErrors.fullName = "Full name is required.";
     if (!emailRegex.test(billing.email || "")) nextErrors.email = "Valid email is required.";
     if (!billing.company.trim()) nextErrors.company = "Company is required.";
-    const phoneToValidate = normalizePhone(phoneOverride || billing.phone);
+    const phoneToValidate = normalizePhone(billing.phone);
     if (!PHONE_E164_REGEX.test(phoneToValidate || "")) nextErrors.phone = "Valid phone is required.";
     if (!billing.address.trim()) nextErrors.address = "Billing address is required.";
     if (!billing.city.trim()) nextErrors.city = "City is required.";
@@ -128,7 +142,7 @@ const Checkout = () => {
     return nextErrors;
   };
 
-  const fetchVerifiedPhoneProfile = async () => {
+  const fetchProfilePhone = async () => {
     const token = await getAccessTokenSilently({
       authorizationParams: { audience: config.audience },
     });
@@ -144,29 +158,260 @@ const Checkout = () => {
 
     return {
       phoneNumber: data?.phone_number || "",
-      phoneVerified: Boolean(data?.phone_verified),
     };
   };
 
-  const enforceCheckoutMfa = async () => {
+  const openMfaPopup = () => {
+    const width = 520;
+    const height = 720;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+    const url = `https://${config.domain}/u/mfa`;
+    const popup = window.open(
+      url,
+      "auth0-mfa",
+      `width=${width},height=${height},left=${Math.max(left, 0)},top=${Math.max(top, 0)}`
+    );
+    if (!popup) {
+      setSubmitState({
+        status: "error",
+        message: "Popup bloccato. Consenti i popup e riprova.",
+      });
+    }
+    return popup;
+  };
+
+  const handleGuardianNotEnrolled = (message) => {
+    const resolved =
+      message ||
+      "Auth0 Guardian non configurato. Completa la configurazione nella finestra popup e riprova.";
+    stopGuardianPolling();
+    pendingOrderRef.current = null;
+    setGuardianFlow((prev) => ({
+      ...prev,
+      status: "error",
+      message: resolved,
+    }));
+    setSubmitState({ status: "error", message: resolved });
+    openMfaPopup();
+  };
+
+  const requestCheckoutMfaToken = async () => {
     const token = await getAccessTokenWithPopup({
       authorizationParams: {
-        audience: config.audience,
+        audience: `https://${config.domain}/mfa/`,
+        scope: MFA_SCOPE,
         acr_values: MFA_ACR,
       },
     });
+    setGuardianFlow((prev) => ({
+      ...prev,
+      mfaToken: token,
+      oobCode: "",
+      authenticatorId: "",
+    }));
     return token;
   };
 
-  const submitOrder = async (phoneOverride, tokenOverride) => {
+  const startCheckoutGuardian = async (tokenOverride) => {
+    const mfaToken = tokenOverride || guardianFlow.mfaToken;
+    if (!mfaToken) {
+      setGuardianFlow((prev) => ({
+        ...prev,
+        status: "error",
+        message: "MFA verification is required before sending the push request.",
+      }));
+      return false;
+    }
+
+    setGuardianFlow((prev) => ({ ...prev, status: "loading", message: "" }));
+
+    try {
+      const apiBase = config.apiOrigin || window.location.origin;
+      const response = await fetch(`${apiBase}/api/mfa/guardian/challenge`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${mfaToken}`,
+        },
+        body: JSON.stringify({ mfaToken }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (data?.code === "GUARDIAN_NOT_ENROLLED") {
+          handleGuardianNotEnrolled(data?.message);
+          return false;
+        }
+        throw new Error(data?.message || "Unable to send Guardian push.");
+      }
+
+      setGuardianFlow((prev) => ({
+        ...prev,
+        status: "pending",
+        message: "Approva la notifica su Auth0 Guardian, sto attendendo la conferma.",
+        mfaToken,
+        oobCode: data?.oobCode || "",
+        authenticatorId: data?.authenticatorId || "",
+      }));
+      setSubmitState({
+        status: "info",
+        message: "Approva la notifica su Auth0 Guardian, sto attendendo la conferma.",
+      });
+      return true;
+    } catch (err) {
+      setGuardianFlow((prev) => ({
+        ...prev,
+        status: "error",
+        message: err?.message || "Unable to send Guardian push.",
+      }));
+      setSubmitState({
+        status: "error",
+        message: err?.message || "Unable to send Guardian push.",
+      });
+      return false;
+    }
+  };
+
+  const verifyCheckoutGuardian = async () => {
+    if (!guardianFlow.oobCode) {
+      setGuardianFlow((prev) => ({
+        ...prev,
+        status: "error",
+        message: "Push verification is required before continuing.",
+      }));
+      return "error";
+    }
+
+    setGuardianFlow((prev) => ({ ...prev, status: "verifying", message: "" }));
+
+    try {
+      const apiBase = config.apiOrigin || window.location.origin;
+      const response = await fetch(`${apiBase}/api/mfa/guardian/verify`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${guardianFlow.mfaToken}`,
+        },
+        body: JSON.stringify({
+          mfaToken: guardianFlow.mfaToken,
+          oobCode: guardianFlow.oobCode,
+          authenticatorId: guardianFlow.authenticatorId,
+          updatePhone: false,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (data?.code === "GUARDIAN_NOT_ENROLLED") {
+          handleGuardianNotEnrolled(data?.message);
+          return "error";
+        }
+        if (data?.code === "AUTH_PENDING") {
+          setGuardianFlow((prev) => ({
+            ...prev,
+            status: "pending",
+            message:
+              data?.message ||
+              "Approva la notifica su Auth0 Guardian, sto attendendo la conferma.",
+          }));
+          setSubmitState({
+            status: "info",
+            message:
+              data?.message ||
+              "Approva la notifica su Auth0 Guardian, sto attendendo la conferma.",
+          });
+          return "pending";
+        }
+        throw new Error(data?.message || "Guardian verification failed.");
+      }
+
+      setGuardianFlow((prev) => ({
+        ...prev,
+        status: "success",
+        message: "Autorizzazione completata. Sto completando l'ordine.",
+      }));
+      return "success";
+    } catch (err) {
+      setGuardianFlow((prev) => ({
+        ...prev,
+        status: "error",
+        message: err?.message || "Guardian verification failed.",
+      }));
+      setSubmitState({
+        status: "error",
+        message: err?.message || "Guardian verification failed.",
+      });
+      return "error";
+    }
+  };
+
+  function stopGuardianPolling() {
+    if (guardianPollRef.current) {
+      clearTimeout(guardianPollRef.current);
+      guardianPollRef.current = null;
+    }
+  }
+
+  const submitOrderWithGuard = async (phoneNumber) => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    try {
+      await submitOrder(phoneNumber);
+    } finally {
+      submittingRef.current = false;
+    }
+  };
+
+  const startGuardianPolling = (phoneNumber) => {
+    stopGuardianPolling();
+    pendingOrderRef.current = { phoneNumber };
+    guardianAttemptsRef.current = 0;
+
+    const poll = async () => {
+      if (!isMountedRef.current) return;
+      guardianAttemptsRef.current += 1;
+      const result = await verifyCheckoutGuardian();
+      if (!isMountedRef.current) return;
+      if (result === "success") {
+        stopGuardianPolling();
+        await submitOrderWithGuard(pendingOrderRef.current?.phoneNumber || phoneNumber);
+        return;
+      }
+      if (result === "error") {
+        stopGuardianPolling();
+        return;
+      }
+
+      if (guardianAttemptsRef.current >= GUARDIAN_POLL_MAX_ATTEMPTS) {
+        stopGuardianPolling();
+        setGuardianFlow((prev) => ({
+          ...prev,
+          status: "error",
+          message: "Tempo scaduto. Riprova l'approvazione su Auth0 Guardian.",
+        }));
+        setSubmitState({
+          status: "error",
+          message: "Tempo scaduto. Riprova l'approvazione su Auth0 Guardian.",
+        });
+        return;
+      }
+
+      guardianPollRef.current = setTimeout(poll, GUARDIAN_POLL_INTERVAL_MS);
+    };
+
+    guardianPollRef.current = setTimeout(poll, GUARDIAN_POLL_INTERVAL_MS);
+  };
+
+  const submitOrder = async (phoneOverride) => {
+    stopGuardianPolling();
+    pendingOrderRef.current = null;
     setSubmitState({ status: "loading", message: "" });
 
     try {
-      const token =
-        tokenOverride ||
-        (await getAccessTokenSilently({
-          authorizationParams: { audience: config.audience },
-        }));
+      const token = await getAccessTokenSilently({
+        authorizationParams: { audience: config.audience },
+      });
 
       const apiBase = config.apiOrigin || window.location.origin;
       const phoneValue = normalizePhone(phoneOverride || billing.phone);
@@ -209,6 +454,14 @@ const Checkout = () => {
       setLastOrder(order);
       setSubmitState({ status: "success", message: "Order placed successfully." });
       setShowSuccessDialog(true);
+      setGuardianFlow({
+        status: "idle",
+        message: "",
+        mfaToken: "",
+        oobCode: "",
+        authenticatorId: "",
+      });
+      pendingOrderRef.current = null;
     } catch (err) {
       setSubmitState({
         status: "error",
@@ -233,12 +486,19 @@ const Checkout = () => {
   }, [user]);
 
   useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      stopGuardianPolling();
+    };
+  }, []);
+
+  useEffect(() => {
     if (!user) return;
     let isMounted = true;
 
     const loadProfilePhone = async () => {
       try {
-        const profile = await fetchVerifiedPhoneProfile();
+        const profile = await fetchProfilePhone();
         if (!isMounted) return;
         if (profile.phoneNumber) {
           setBilling((prev) => ({
@@ -298,38 +558,36 @@ const Checkout = () => {
 
   // Handlers
   const handlePlaceOrder = async () => {
-    let verifiedPhoneCandidate = "";
-    let mfaTokenOverride = "";
-    if (mfaRequired) {
-      try {
-        const profile = await fetchVerifiedPhoneProfile();
-        if (profile.phoneVerified) {
-          const normalized = normalizePhone(profile.phoneNumber);
-          if (/^\+\d{6,}$/.test(normalized)) {
-            verifiedPhoneCandidate = normalized;
-          }
-        }
-      } catch {
-        verifiedPhoneCandidate = "";
-      }
-    }
-
     const normalizedPhone = normalizePhone(billing.phone);
     if (normalizedPhone && normalizedPhone !== billing.phone) {
       setBilling((prev) => ({ ...prev, phone: normalizedPhone }));
     }
 
-    const nextErrors = validate(verifiedPhoneCandidate || normalizedPhone);
+    const nextErrors = validate();
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
       setSubmitState({ status: "error", message: "Please fix the highlighted fields." });
       return;
     }
 
-    if (mfaRequired && !mfaVerified) {
+    if (mfaRequired && guardianFlow.status !== "success") {
       try {
-        mfaTokenOverride = await enforceCheckoutMfa();
-        setMfaVerified(true);
+        let token = guardianFlow.mfaToken;
+        if (!token) {
+          token = await requestCheckoutMfaToken();
+        }
+        if (
+          !guardianFlow.oobCode ||
+          guardianFlow.status === "idle" ||
+          guardianFlow.status === "error"
+        ) {
+          const started = await startCheckoutGuardian(token);
+          if (!started) return;
+          startGuardianPolling(normalizedPhone);
+          return;
+        }
+        startGuardianPolling(normalizedPhone);
+        return;
       } catch (err) {
         setSubmitState({
           status: "error",
@@ -339,7 +597,7 @@ const Checkout = () => {
       }
     }
 
-    await submitOrder(verifiedPhoneCandidate, mfaTokenOverride);
+    await submitOrder(normalizedPhone);
   };
 
   return (
@@ -384,7 +642,15 @@ const Checkout = () => {
                   const nextValue = event.target.value;
                   setBilling((prev) => ({ ...prev, email: nextValue }));
                   if (mfaRequired) {
-                    setMfaVerified(false);
+                    stopGuardianPolling();
+                    pendingOrderRef.current = null;
+                    setGuardianFlow((prev) => ({
+                      ...prev,
+                      status: "idle",
+                      message: "",
+                      oobCode: "",
+                      authenticatorId: "",
+                    }));
                   }
                 }}
               />
@@ -412,7 +678,15 @@ const Checkout = () => {
                   const nextValue = event.target.value;
                   setBilling((prev) => ({ ...prev, phone: nextValue }));
                   if (mfaRequired) {
-                    setMfaVerified(false);
+                    stopGuardianPolling();
+                    pendingOrderRef.current = null;
+                    setGuardianFlow((prev) => ({
+                      ...prev,
+                      status: "idle",
+                      message: "",
+                      oobCode: "",
+                      authenticatorId: "",
+                    }));
                   }
                 }}
                 onBlur={() => {
@@ -731,7 +1005,9 @@ const Checkout = () => {
             disabled={
               effectiveCart.length === 0 ||
               submitState.status === "loading" ||
-              (mfaRequired && !mfaChecked)
+              (mfaRequired && !mfaChecked) ||
+              guardianFlow.status === "loading" ||
+              guardianFlow.status === "verifying"
             }
             onClick={handlePlaceOrder}
           >
@@ -739,7 +1015,7 @@ const Checkout = () => {
           </button>
           {mfaRequired ? (
             <div className="submit-status info">
-              MFA required for this account.
+              Auth0 Guardian approval required for this account.
             </div>
           ) : null}
           {submitState.message ? (
