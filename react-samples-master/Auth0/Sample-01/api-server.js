@@ -924,45 +924,6 @@ app.post("/api/mfa/guardian/challenge", checkMfaJwt, async (req, res) => {
   }
 });
 
-app.get("/api/mfa/guardian/authenticators", checkMfaJwt, async (req, res) => {
-  const userId = req.auth?.payload?.sub;
-  const mfaToken = getBearerToken(req);
-
-  if (!userId) {
-    return res.status(400).json({ message: "User id not available." });
-  }
-
-  if (!mfaToken) {
-    return res.status(400).json({ message: "MFA token is required." });
-  }
-
-  try {
-    const listResponse = await fetch(`https://${authConfig.domain}/mfa/authenticators`, {
-      headers: {
-        authorization: `Bearer ${mfaToken}`,
-      },
-    });
-    const listData = await listResponse.json().catch(() => ([]));
-    if (!listResponse.ok) {
-      return res.status(listResponse.status).json({
-        message: "Unable to load MFA authenticators.",
-        details: listData,
-      });
-    }
-
-    const items = normalizeAuthenticators(listData).map((authenticator) => ({
-      id: authenticator?.id,
-      type: authenticator?.authenticator_type || authenticator?.type,
-      channel: authenticator?.oob_channel || authenticator?.channel,
-      name: authenticator?.name,
-    }));
-
-    return res.json({ authenticators: items, raw: listData });
-  } catch (error) {
-    return res.status(500).json({ message: error?.message || "Server error." });
-  }
-});
-
 app.post("/api/mfa/guardian/verify", checkMfaJwt, async (req, res) => {
   const userId = req.auth?.payload?.sub;
   const bodyToken = (req.body?.mfaToken || "").trim();

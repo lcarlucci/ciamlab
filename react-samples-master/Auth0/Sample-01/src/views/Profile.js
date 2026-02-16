@@ -33,6 +33,13 @@ export const ProfileComponent = () => {
     oobCode: "",
     authenticatorId: "",
   });
+  const phoneFlowRef = useRef({
+    status: "idle",
+    message: "",
+    mfaToken: "",
+    oobCode: "",
+    authenticatorId: "",
+  });
   const [toast, setToast] = useState(null);
   const [requiresPhoneMfa, setRequiresPhoneMfa] = useState(false);
   const [phoneEditUnlocked, setPhoneEditUnlocked] = useState(false);
@@ -93,6 +100,13 @@ export const ProfileComponent = () => {
         "Auth0 Guardian non configurato. Completa la configurazione nella finestra popup e riprova.",
       "error"
     );
+    phoneFlowRef.current = {
+      ...phoneFlowRef.current,
+      status: "error",
+      message:
+        message ||
+        "Auth0 Guardian non configurato. Completa la configurazione nella finestra popup e riprova.",
+    };
     openMfaPopup();
   };
 
@@ -103,6 +117,10 @@ export const ProfileComponent = () => {
       }
     };
   }, []);
+
+  useEffect(() => {
+    phoneFlowRef.current = phoneFlow;
+  }, [phoneFlow]);
 
   const normalizePhoneNumber = (value) => {
     const raw = (value || "").trim();
@@ -422,6 +440,13 @@ export const ProfileComponent = () => {
         oobCode: "",
         authenticatorId: "",
       });
+      phoneFlowRef.current = {
+        status: "idle",
+        message: "",
+        mfaToken: "",
+        oobCode: "",
+        authenticatorId: "",
+      };
       setPhoneVerified(phoneSnapshot.phoneVerified);
       setPhoneEditUnlocked(false);
     }
@@ -452,6 +477,13 @@ export const ProfileComponent = () => {
         oobCode: "",
         authenticatorId: "",
       }));
+      phoneFlowRef.current = {
+        status: "idle",
+        message: "",
+        mfaToken,
+        oobCode: "",
+        authenticatorId: "",
+      };
       return mfaToken;
     } catch (err) {
       const message = err?.message || "MFA required to edit phone number.";
@@ -468,6 +500,12 @@ export const ProfileComponent = () => {
         message,
         mfaToken: "",
       }));
+      phoneFlowRef.current = {
+        ...phoneFlowRef.current,
+        status: "error",
+        message,
+        mfaToken: "",
+      };
       return "";
     }
   };
@@ -491,12 +529,17 @@ export const ProfileComponent = () => {
         await startGuardianChallenge(token);
         return;
       }
-      setPhoneFlow({
-        status: "idle",
-        message: "",
-        mfaToken: "",
-        oobCode: "",
-        authenticatorId: "",
+      setPhoneFlow((prev) => {
+        const next = {
+          ...prev,
+          status: "idle",
+          message: "",
+          mfaToken: "",
+          oobCode: "",
+          authenticatorId: "",
+        };
+        phoneFlowRef.current = next;
+        return next;
       });
       setPhoneEditUnlocked(true);
     }
@@ -530,7 +573,7 @@ export const ProfileComponent = () => {
   };
 
   const startGuardianChallenge = async (tokenOverride) => {
-    const mfaToken = tokenOverride || phoneFlow.mfaToken;
+    const mfaToken = tokenOverride || phoneFlowRef.current.mfaToken || phoneFlow.mfaToken;
     if (!mfaToken) {
       setPhoneFlow((prev) => ({
         ...prev,
@@ -540,7 +583,11 @@ export const ProfileComponent = () => {
       return false;
     }
 
-    setPhoneFlow((prev) => ({ ...prev, status: "loading", message: "" }));
+    setPhoneFlow((prev) => {
+      const next = { ...prev, status: "loading", message: "" };
+      phoneFlowRef.current = next;
+      return next;
+    });
 
     try {
       const apiBase = config.apiOrigin || window.location.origin;
@@ -561,37 +608,54 @@ export const ProfileComponent = () => {
         throw new Error(buildErrorMessage(data, "Unable to send Guardian push."));
       }
 
-      setPhoneFlow((prev) => ({
-        ...prev,
-        status: "pending",
-        message:
-          "Approva la notifica su Auth0 Guardian per sbloccare la modifica del numero.",
-        mfaToken,
-        oobCode: data?.oobCode || "",
-        authenticatorId: data?.authenticatorId || "",
-      }));
+      setPhoneFlow((prev) => {
+        const next = {
+          ...prev,
+          status: "pending",
+          message:
+            "Approva la notifica su Auth0 Guardian per sbloccare la modifica del numero.",
+          mfaToken,
+          oobCode: data?.oobCode || "",
+          authenticatorId: data?.authenticatorId || "",
+        };
+        phoneFlowRef.current = next;
+        return next;
+      });
       return true;
     } catch (err) {
-      setPhoneFlow((prev) => ({
-        ...prev,
-        status: "error",
-        message: err?.message || "Unable to send Guardian push.",
-      }));
+      setPhoneFlow((prev) => {
+        const next = {
+          ...prev,
+          status: "error",
+          message: err?.message || "Unable to send Guardian push.",
+        };
+        phoneFlowRef.current = next;
+        return next;
+      });
       return false;
     }
   };
 
   const verifyGuardianApproval = async () => {
-    if (!phoneFlow.oobCode) {
-      setPhoneFlow((prev) => ({
-        ...prev,
-        status: "error",
-        message: "Push verification is required before continuing.",
-      }));
+    const current = phoneFlowRef.current;
+    if (!current.oobCode) {
+      setPhoneFlow((prev) => {
+        const next = {
+          ...prev,
+          status: "error",
+          message: "Push verification is required before continuing.",
+        };
+        phoneFlowRef.current = next;
+        return next;
+      });
       return;
     }
 
-    setPhoneFlow((prev) => ({ ...prev, status: "verifying", message: "" }));
+    setPhoneFlow((prev) => {
+      const next = { ...prev, status: "verifying", message: "" };
+      phoneFlowRef.current = next;
+      return next;
+    });
 
     try {
       const apiBase = config.apiOrigin || window.location.origin;
@@ -599,12 +663,12 @@ export const ProfileComponent = () => {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          authorization: `Bearer ${phoneFlow.mfaToken}`,
+          authorization: `Bearer ${current.mfaToken}`,
         },
         body: JSON.stringify({
-          mfaToken: phoneFlow.mfaToken,
-          oobCode: phoneFlow.oobCode,
-          authenticatorId: phoneFlow.authenticatorId,
+          mfaToken: current.mfaToken,
+          oobCode: current.oobCode,
+          authenticatorId: current.authenticatorId,
           updatePhone: false,
         }),
       });
@@ -616,30 +680,42 @@ export const ProfileComponent = () => {
           return;
         }
         if (data?.code === "AUTH_PENDING") {
-          setPhoneFlow((prev) => ({
-            ...prev,
-            status: "pending",
-            message:
-              data?.message ||
-              "Approva la notifica su Auth0 Guardian e poi clicca Verifica.",
-          }));
+          setPhoneFlow((prev) => {
+            const next = {
+              ...prev,
+              status: "pending",
+              message:
+                data?.message ||
+                "Approva la notifica su Auth0 Guardian e poi clicca Verifica.",
+            };
+            phoneFlowRef.current = next;
+            return next;
+          });
           return;
         }
         throw new Error(buildErrorMessage(data, "Guardian verification failed."));
       }
 
       setPhoneEditUnlocked(true);
-      setPhoneFlow((prev) => ({
-        ...prev,
-        status: "success",
-        message: "Autorizzazione completata. Ora puoi modificare il numero.",
-      }));
+      setPhoneFlow((prev) => {
+        const next = {
+          ...prev,
+          status: "success",
+          message: "Autorizzazione completata. Ora puoi modificare il numero.",
+        };
+        phoneFlowRef.current = next;
+        return next;
+      });
     } catch (err) {
-      setPhoneFlow((prev) => ({
-        ...prev,
-        status: "error",
-        message: err?.message || "Guardian verification failed.",
-      }));
+      setPhoneFlow((prev) => {
+        const next = {
+          ...prev,
+          status: "error",
+          message: err?.message || "Guardian verification failed.",
+        };
+        phoneFlowRef.current = next;
+        return next;
+      });
     }
   };
 

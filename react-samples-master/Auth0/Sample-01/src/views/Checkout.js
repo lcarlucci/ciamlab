@@ -91,6 +91,13 @@ const Checkout = () => {
     oobCode: "",
     authenticatorId: "",
   });
+  const guardianFlowRef = useRef({
+    status: "idle",
+    message: "",
+    mfaToken: "",
+    oobCode: "",
+    authenticatorId: "",
+  });
   const guardianPollRef = useRef(null);
   const guardianAttemptsRef = useRef(0);
   const pendingOrderRef = useRef(null);
@@ -187,11 +194,15 @@ const Checkout = () => {
       "Auth0 Guardian non configurato. Completa la configurazione nella finestra popup e riprova.";
     stopGuardianPolling();
     pendingOrderRef.current = null;
-    setGuardianFlow((prev) => ({
-      ...prev,
-      status: "error",
-      message: resolved,
-    }));
+    setGuardianFlow((prev) => {
+      const next = {
+        ...prev,
+        status: "error",
+        message: resolved,
+      };
+      guardianFlowRef.current = next;
+      return next;
+    });
     setSubmitState({ status: "error", message: resolved });
     openMfaPopup();
   };
@@ -204,12 +215,16 @@ const Checkout = () => {
         acr_values: MFA_ACR,
       },
     });
-    setGuardianFlow((prev) => ({
-      ...prev,
-      mfaToken: token,
-      oobCode: "",
-      authenticatorId: "",
-    }));
+    setGuardianFlow((prev) => {
+      const next = {
+        ...prev,
+        mfaToken: token,
+        oobCode: "",
+        authenticatorId: "",
+      };
+      guardianFlowRef.current = next;
+      return next;
+    });
     return token;
   };
 
@@ -246,14 +261,18 @@ const Checkout = () => {
         throw new Error(data?.message || "Unable to send Guardian push.");
       }
 
-      setGuardianFlow((prev) => ({
-        ...prev,
-        status: "pending",
-        message: "Approva la notifica su Auth0 Guardian, sto attendendo la conferma.",
-        mfaToken,
-        oobCode: data?.oobCode || "",
-        authenticatorId: data?.authenticatorId || "",
-      }));
+      setGuardianFlow((prev) => {
+        const next = {
+          ...prev,
+          status: "pending",
+          message: "Approva la notifica su Auth0 Guardian, sto attendendo la conferma.",
+          mfaToken,
+          oobCode: data?.oobCode || "",
+          authenticatorId: data?.authenticatorId || "",
+        };
+        guardianFlowRef.current = next;
+        return next;
+      });
       setSubmitState({
         status: "info",
         message: "Approva la notifica su Auth0 Guardian, sto attendendo la conferma.",
@@ -274,14 +293,20 @@ const Checkout = () => {
   };
 
   const verifyCheckoutGuardian = async () => {
-    if (!guardianFlow.oobCode) {
-      setGuardianFlow((prev) => ({
-        ...prev,
-        status: "error",
-        message: "Push verification is required before continuing.",
-      }));
-      return "error";
-    }
+    const current = guardianFlowRef.current;
+    if (!current.oobCode) {
+    setGuardianFlow((prev) => ({
+      ...prev,
+      status: "error",
+      message: "Push verification is required before continuing.",
+    }));
+    guardianFlowRef.current = {
+      ...guardianFlowRef.current,
+      status: "error",
+      message: "Push verification is required before continuing.",
+    };
+    return "error";
+  }
 
     setGuardianFlow((prev) => ({ ...prev, status: "verifying", message: "" }));
 
@@ -291,12 +316,12 @@ const Checkout = () => {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          authorization: `Bearer ${guardianFlow.mfaToken}`,
+          authorization: `Bearer ${current.mfaToken}`,
         },
         body: JSON.stringify({
-          mfaToken: guardianFlow.mfaToken,
-          oobCode: guardianFlow.oobCode,
-          authenticatorId: guardianFlow.authenticatorId,
+          mfaToken: current.mfaToken,
+          oobCode: current.oobCode,
+          authenticatorId: current.authenticatorId,
           updatePhone: false,
         }),
       });
@@ -308,13 +333,17 @@ const Checkout = () => {
           return "error";
         }
         if (data?.code === "AUTH_PENDING") {
-          setGuardianFlow((prev) => ({
-            ...prev,
-            status: "pending",
-            message:
-              data?.message ||
-              "Approva la notifica su Auth0 Guardian, sto attendendo la conferma.",
-          }));
+          setGuardianFlow((prev) => {
+            const next = {
+              ...prev,
+              status: "pending",
+              message:
+                data?.message ||
+                "Approva la notifica su Auth0 Guardian, sto attendendo la conferma.",
+            };
+            guardianFlowRef.current = next;
+            return next;
+          });
           setSubmitState({
             status: "info",
             message:
@@ -326,18 +355,26 @@ const Checkout = () => {
         throw new Error(data?.message || "Guardian verification failed.");
       }
 
-      setGuardianFlow((prev) => ({
-        ...prev,
-        status: "success",
-        message: "Autorizzazione completata. Sto completando l'ordine.",
-      }));
+      setGuardianFlow((prev) => {
+        const next = {
+          ...prev,
+          status: "success",
+          message: "Autorizzazione completata. Sto completando l'ordine.",
+        };
+        guardianFlowRef.current = next;
+        return next;
+      });
       return "success";
     } catch (err) {
-      setGuardianFlow((prev) => ({
-        ...prev,
-        status: "error",
-        message: err?.message || "Guardian verification failed.",
-      }));
+      setGuardianFlow((prev) => {
+        const next = {
+          ...prev,
+          status: "error",
+          message: err?.message || "Guardian verification failed.",
+        };
+        guardianFlowRef.current = next;
+        return next;
+      });
       setSubmitState({
         status: "error",
         message: err?.message || "Guardian verification failed.",
@@ -454,12 +491,17 @@ const Checkout = () => {
       setLastOrder(order);
       setSubmitState({ status: "success", message: "Order placed successfully." });
       setShowSuccessDialog(true);
-      setGuardianFlow({
-        status: "idle",
-        message: "",
-        mfaToken: "",
-        oobCode: "",
-        authenticatorId: "",
+      setGuardianFlow((prev) => {
+        const next = {
+          ...prev,
+          status: "idle",
+          message: "",
+          mfaToken: "",
+          oobCode: "",
+          authenticatorId: "",
+        };
+        guardianFlowRef.current = next;
+        return next;
       });
       pendingOrderRef.current = null;
     } catch (err) {
@@ -491,6 +533,10 @@ const Checkout = () => {
       stopGuardianPolling();
     };
   }, []);
+
+  useEffect(() => {
+    guardianFlowRef.current = guardianFlow;
+  }, [guardianFlow]);
 
   useEffect(() => {
     if (!user) return;
@@ -644,13 +690,17 @@ const Checkout = () => {
                   if (mfaRequired) {
                     stopGuardianPolling();
                     pendingOrderRef.current = null;
-                    setGuardianFlow((prev) => ({
-                      ...prev,
-                      status: "idle",
-                      message: "",
-                      oobCode: "",
-                      authenticatorId: "",
-                    }));
+                    setGuardianFlow((prev) => {
+                      const next = {
+                        ...prev,
+                        status: "idle",
+                        message: "",
+                        oobCode: "",
+                        authenticatorId: "",
+                      };
+                      guardianFlowRef.current = next;
+                      return next;
+                    });
                   }
                 }}
               />
@@ -680,13 +730,17 @@ const Checkout = () => {
                   if (mfaRequired) {
                     stopGuardianPolling();
                     pendingOrderRef.current = null;
-                    setGuardianFlow((prev) => ({
-                      ...prev,
-                      status: "idle",
-                      message: "",
-                      oobCode: "",
-                      authenticatorId: "",
-                    }));
+                    setGuardianFlow((prev) => {
+                      const next = {
+                        ...prev,
+                        status: "idle",
+                        message: "",
+                        oobCode: "",
+                        authenticatorId: "",
+                      };
+                      guardianFlowRef.current = next;
+                      return next;
+                    });
                   }
                 }}
                 onBlur={() => {
