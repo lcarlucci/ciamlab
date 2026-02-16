@@ -799,16 +799,27 @@ const getBearerToken = (req) => {
   return match ? match[1] : "";
 };
 
+const normalizeAuthenticators = (authenticators) => {
+  if (Array.isArray(authenticators)) return authenticators;
+  if (Array.isArray(authenticators?.authenticators)) return authenticators.authenticators;
+  return [];
+};
+
 const findGuardianAuthenticator = (authenticators) => {
-  if (!Array.isArray(authenticators)) return null;
+  const items = normalizeAuthenticators(authenticators);
   return (
-    authenticators.find((authenticator) => {
+    items.find((authenticator) => {
       if (!authenticator) return false;
-      const channel = String(authenticator.oob_channel || "").toLowerCase();
+      const channel = String(
+        authenticator.oob_channel || authenticator.channel || ""
+      ).toLowerCase();
       const type = String(
         authenticator.authenticator_type || authenticator.type || ""
       ).toLowerCase();
-      return channel === "push" && type === "oob";
+      if (channel.includes("push")) {
+        return type === "oob" || type === "guardian" || type.includes("push");
+      }
+      return type === "guardian";
     }) || null
   );
 };
