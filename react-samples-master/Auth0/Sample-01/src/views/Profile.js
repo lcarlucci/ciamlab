@@ -34,6 +34,8 @@ export const ProfileComponent = () => {
     authenticatorId: "",
     otp: "",
     mode: "new",
+    channel: "guardian",
+    pendingPhoneNumber: "",
   });
   const [toast, setToast] = useState(null);
   const [requiresPhoneMfa, setRequiresPhoneMfa] = useState(false);
@@ -79,6 +81,32 @@ export const ProfileComponent = () => {
       setToast(null);
       toastTimeoutRef.current = null;
     }, TOAST_TTL_MS);
+  };
+
+  const openMfaPopup = () => {
+    const width = 520;
+    const height = 720;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+    const url = `https://${config.domain}/u/mfa`;
+    const popup = window.open(
+      url,
+      "auth0-mfa",
+      `width=${width},height=${height},left=${Math.max(left, 0)},top=${Math.max(top, 0)}`
+    );
+    if (!popup) {
+      showToast("Popup bloccato. Consenti i popup e riprova.", "error");
+    }
+    return popup;
+  };
+
+  const handleGuardianNotEnrolled = (message) => {
+    showToast(
+      message ||
+        "Auth0 Guardian non configurato. Completa la configurazione nella finestra popup e riprova.",
+      "error"
+    );
+    openMfaPopup();
   };
 
   useEffect(() => {
@@ -283,9 +311,9 @@ export const ProfileComponent = () => {
         : "To change your password, use your login provider settings."
     : "";
 
-  const requiresOldPhoneOtp =
-    isSocialUser && requiresPhoneMfa && phoneSnapshotReady && phoneSnapshot.phoneNumber;
   const shouldUseOtpFlow = !isSocialUser || requiresPhoneMfa;
+  const requiresOldPhoneOtp =
+    shouldUseOtpFlow && phoneSnapshotReady && phoneSnapshot.phoneNumber;
 
   const checkPhoneAvailability = async (phoneNumber) => {
     const normalized = normalizePhoneNumber(phoneNumber);
@@ -453,6 +481,8 @@ export const ProfileComponent = () => {
         authenticatorId: "",
         otp: "",
         mode: "new",
+        channel: "guardian",
+        pendingPhoneNumber: "",
       });
       setPhoneVerified(phoneSnapshot.phoneVerified);
       setPhoneEditUnlocked(false);
@@ -485,6 +515,8 @@ export const ProfileComponent = () => {
         authenticatorId: "",
         otp: "",
         mode: "new",
+        channel: "guardian",
+        pendingPhoneNumber: "",
       }));
       return mfaToken;
     } catch (err) {
@@ -560,31 +592,43 @@ export const ProfileComponent = () => {
       setPhoneFlow({
         status: "error",
         message: "Phone number is required.",
-        mfaToken: "",
+        mfaToken: phoneFlow.mfaToken,
         oobCode: "",
+        authenticatorId: "",
         otp: "",
         mode,
+        channel: "guardian",
+        pendingPhoneNumber: "",
       });
       setPhoneVerified(false);
       return;
     }
 
-    const availability = await checkPhoneAvailability(phoneNumber);
-    if (availability.checked && !availability.available) {
-      handlePhoneInUse(availability.message || PHONE_IN_USE_MESSAGE);
-      return;
+    if (mode !== "old") {
+      const availability = await checkPhoneAvailability(phoneNumber);
+      if (availability.checked && !availability.available) {
+        handlePhoneInUse(availability.message || PHONE_IN_USE_MESSAGE);
+        return;
+      }
     }
 
     if (!phoneFlow.mfaToken) {
       setPhoneFlow((prev) => ({
         ...prev,
         status: "error",
-        message: "MFA verification is required before sending OTP.",
+        message: "MFA verification is required before sending the push request.",
       }));
       return;
     }
 
-    setPhoneFlow((prev) => ({ ...prev, status: "loading", message: "", mode }));
+    setPhoneFlow((prev) => ({
+      ...prev,
+      status: "loading",
+      message: "",
+      mode,
+      pendingPhoneNumber: phoneNumber,
+      channel: "guardian",
+    }));
     setPhoneVerified(false);
 
     try {
@@ -594,34 +638,43 @@ export const ProfileComponent = () => {
       const mfaToken = phoneFlow.mfaToken;
 
       const apiBase = config.apiOrigin || window.location.origin;
-      const response = await fetch(`${apiBase}/api/mfa/enroll-sms`, {
+      const response = await fetch(`${apiBase}/api/mfa/guardian/challenge`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
           authorization: `Bearer ${mfaToken}`,
         },
-        body: JSON.stringify({ phoneNumber, mfaToken, replaceExisting: true }),
+        body: JSON.stringify({ mfaToken }),
       });
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(buildErrorMessage(data, "Unable to send OTP."));
+        if (data?.code === "GUARDIAN_NOT_ENROLLED") {
+          handleGuardianNotEnrolled(data?.message);
+        }
+        throw new Error(buildErrorMessage(data, "Unable to send Guardian push."));
       }
 
+      const successMessage =
+        mode === "old"
+          ? "Notifica inviata per verificare il numero attuale. Approva su Guardian e poi clicca Verifica."
+          : "Notifica inviata su Auth0 Guardian. Approva e poi clicca Verifica.";
       setPhoneFlow({
         status: "code_sent",
-        message: "OTP sent to your phone.",
+        message: successMessage,
         mfaToken,
         oobCode: data?.oobCode || "",
         authenticatorId: data?.authenticatorId || "",
         otp: "",
         mode,
+        channel: "guardian",
+        pendingPhoneNumber: phoneNumber,
       });
     } catch (err) {
       setPhoneFlow((prev) => ({
         ...prev,
         status: "error",
-        message: err?.message || "Unable to send OTP.",
+        message: err?.message || "Unable to send Guardian push.",
         mode,
       }));
     }
@@ -629,12 +682,11 @@ export const ProfileComponent = () => {
 
   const verifyPhoneOtp = async (options = {}) => {
     const { phoneNumberOverride } = options;
-    const otp = (phoneFlow.otp || "").replace(/\D/g, "");
-    if (!otp) {
+    if (!phoneFlow.oobCode) {
       setPhoneFlow((prev) => ({
         ...prev,
         status: "error",
-        message: "OTP code is required.",
+        message: "Push verification is required before continuing.",
       }));
       return;
     }
@@ -642,11 +694,20 @@ export const ProfileComponent = () => {
     setPhoneFlow((prev) => ({ ...prev, status: "verifying", message: "" }));
 
     try {
-      const phoneNumber = normalizePhoneNumber(
-        ((phoneNumberOverride ?? fieldValues.phone_number) || "")
-      );
+      const shouldUpdatePhone = phoneFlow.mode !== "old";
+      const resolvedNumber =
+        phoneNumberOverride ?? phoneFlow.pendingPhoneNumber ?? fieldValues.phone_number;
+      const phoneNumber = normalizePhoneNumber((resolvedNumber || "").trim());
+      if (shouldUpdatePhone && !phoneNumber) {
+        setPhoneFlow((prev) => ({
+          ...prev,
+          status: "error",
+          message: "Phone number is required.",
+        }));
+        return;
+      }
       const apiBase = config.apiOrigin || window.location.origin;
-      const response = await fetch(`${apiBase}/api/mfa/verify-sms`, {
+      const response = await fetch(`${apiBase}/api/mfa/guardian/verify`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -656,8 +717,8 @@ export const ProfileComponent = () => {
           mfaToken: phoneFlow.mfaToken,
           oobCode: phoneFlow.oobCode,
           authenticatorId: phoneFlow.authenticatorId,
-          otp,
-          phoneNumber,
+          updatePhone: shouldUpdatePhone,
+          ...(shouldUpdatePhone ? { phoneNumber } : {}),
         }),
       });
 
@@ -667,7 +728,21 @@ export const ProfileComponent = () => {
           handlePhoneInUse(data?.message);
           return;
         }
-        throw new Error(buildErrorMessage(data, "OTP verification failed."));
+        if (data?.code === "GUARDIAN_NOT_ENROLLED") {
+          handleGuardianNotEnrolled(data?.message);
+          return;
+        }
+        if (data?.code === "AUTH_PENDING") {
+          setPhoneFlow((prev) => ({
+            ...prev,
+            status: "code_sent",
+            message:
+              data?.message ||
+              "Approva la notifica su Auth0 Guardian e poi clicca Verifica.",
+          }));
+          return;
+        }
+        throw new Error(buildErrorMessage(data, "Guardian verification failed."));
       }
 
       if (phoneFlow.mode === "old") {
@@ -675,7 +750,7 @@ export const ProfileComponent = () => {
         setPhoneFlow((prev) => ({
           ...prev,
           status: "success",
-          message: "Current phone verified. You can update the number.",
+          message: "Numero attuale verificato. Ora puoi modificare il numero.",
           otp: "",
         }));
         return;
@@ -698,7 +773,7 @@ export const ProfileComponent = () => {
       setPhoneFlow((prev) => ({
         ...prev,
         status: "error",
-        message: err?.message || "OTP verification failed.",
+        message: err?.message || "Guardian verification failed.",
       }));
     }
   };
@@ -1055,8 +1130,8 @@ export const ProfileComponent = () => {
                                       {phoneFlow.status === "loading"
                                         ? "Sending..."
                                         : phoneFlow.status === "code_sent"
-                                          ? "Resend OTP"
-                                          : "Send OTP"}
+                                          ? "Resend Push"
+                                          : "Send Push"}
                                     </button>
                                     <button
                                       className="field-cancel-button"
@@ -1072,19 +1147,10 @@ export const ProfileComponent = () => {
                                     phoneFlow.status === "success" ||
                                     phoneFlow.status === "error") ? (
                                     <div className="field-otp">
-                                      <label>OTP code</label>
-                                      <input
-                                        className="field-input"
-                                        type="text"
-                                        value={phoneFlow.otp}
-                                        placeholder="123456"
-                                        onChange={(event) =>
-                                          setPhoneFlow((prev) => ({
-                                            ...prev,
-                                            otp: event.target.value.replace(/\D/g, ""),
-                                          }))
-                                        }
-                                      />
+                                      <div className="field-note">
+                                        Approva la notifica su Auth0 Guardian e poi clicca
+                                        Verifica.
+                                      </div>
                                       <div className="field-edit-actions">
                                         <button
                                           className="field-save-button"
@@ -1126,8 +1192,8 @@ export const ProfileComponent = () => {
                                       {phoneFlow.status === "loading"
                                         ? "Sending..."
                                         : phoneFlow.status === "code_sent"
-                                          ? "Resend OTP"
-                                          : "Send OTP"}
+                                          ? "Resend Push"
+                                          : "Send Push"}
                                     </button>
                                     <button
                                       className="field-cancel-button"
@@ -1143,19 +1209,10 @@ export const ProfileComponent = () => {
                                     phoneFlow.status === "success" ||
                                     phoneFlow.status === "error") ? (
                                     <div className="field-otp">
-                                      <label>OTP code</label>
-                                      <input
-                                        className="field-input"
-                                        type="text"
-                                        value={phoneFlow.otp}
-                                        placeholder="123456"
-                                        onChange={(event) =>
-                                          setPhoneFlow((prev) => ({
-                                            ...prev,
-                                            otp: event.target.value.replace(/\D/g, ""),
-                                          }))
-                                        }
-                                      />
+                                      <div className="field-note">
+                                        Approva la notifica su Auth0 Guardian e poi clicca
+                                        Verifica.
+                                      </div>
                                       <div className="field-edit-actions">
                                         <button
                                           className="field-save-button"

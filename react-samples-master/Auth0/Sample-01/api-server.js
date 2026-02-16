@@ -844,6 +844,288 @@ app.get("/api/admin/overview", checkApiJwt, async (req, res) => {
 // ----------------------------
 // MFA endpoints
 // ----------------------------
+const getBearerToken = (req) => {
+  const header = String(req.headers?.authorization || "");
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1] : "";
+};
+
+const findGuardianAuthenticator = (authenticators) => {
+  if (!Array.isArray(authenticators)) return null;
+  return (
+    authenticators.find((authenticator) => {
+      if (!authenticator) return false;
+      const channel = String(authenticator.oob_channel || "").toLowerCase();
+      const type = String(
+        authenticator.authenticator_type || authenticator.type || ""
+      ).toLowerCase();
+      return channel === "push" && type === "oob";
+    }) || null
+  );
+};
+
+app.post("/api/mfa/guardian/challenge", checkMfaJwt, async (req, res) => {
+  const userId = req.auth?.payload?.sub;
+  const bodyToken = (req.body?.mfaToken || "").trim();
+  const mfaToken = bodyToken || getBearerToken(req);
+
+  if (!userId) {
+    return res.status(400).json({ message: "User id not available." });
+  }
+
+  if (!mfaToken) {
+    return res.status(400).json({ message: "MFA token is required." });
+  }
+
+  try {
+    const listResponse = await fetch(`https://${authConfig.domain}/mfa/authenticators`, {
+      headers: {
+        authorization: `Bearer ${mfaToken}`,
+      },
+    });
+    const listData = await listResponse.json().catch(() => ([]));
+    if (!listResponse.ok) {
+      return res.status(listResponse.status).json({
+        message: "Unable to load MFA authenticators.",
+        details: listData,
+      });
+    }
+
+    const guardianAuth = findGuardianAuthenticator(listData);
+    if (!guardianAuth) {
+      return res.status(409).json({
+        message: "Auth0 Guardian is not enrolled.",
+        code: "GUARDIAN_NOT_ENROLLED",
+      });
+    }
+
+    const challengeResponse = await fetch(`https://${authConfig.domain}/mfa/challenge`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${mfaToken}`,
+      },
+      body: JSON.stringify({
+        client_id: authConfig.clientId,
+        challenge_type: "oob",
+        authenticator_id: guardianAuth.id,
+      }),
+    });
+
+    const challengeData = await challengeResponse.json().catch(() => ({}));
+    if (!challengeResponse.ok) {
+      const requestId =
+        challengeResponse.headers.get("x-auth0-requestid") ||
+        challengeResponse.headers.get("x-request-id") ||
+        challengeResponse.headers.get("x-amzn-requestid");
+      console.error("Guardian challenge failed", {
+        status: challengeResponse.status,
+        error: challengeData?.error,
+        error_description: challengeData?.error_description,
+        requestId,
+      });
+      return res.status(challengeResponse.status).json({
+        message:
+          challengeData?.error_description ||
+          challengeData?.message ||
+          "Unable to start Guardian challenge.",
+        details: {
+          status: challengeResponse.status,
+          error: challengeData?.error,
+          error_description: challengeData?.error_description,
+          requestId,
+        },
+      });
+    }
+
+    return res.json({
+      oobCode: challengeData?.oob_code,
+      authenticatorId: guardianAuth.id,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error?.message || "Server error." });
+  }
+});
+
+app.post("/api/mfa/guardian/verify", checkMfaJwt, async (req, res) => {
+  const userId = req.auth?.payload?.sub;
+  const bodyToken = (req.body?.mfaToken || "").trim();
+  const mfaToken = bodyToken || getBearerToken(req);
+  const oobCode = (req.body?.oobCode || "").trim();
+  const authenticatorId = (req.body?.authenticatorId || "").trim();
+  const phoneNumber = (req.body?.phoneNumber || "").trim();
+  const updatePhone = req.body?.updatePhone !== false;
+
+  if (!userId) {
+    return res.status(400).json({ message: "User id not available." });
+  }
+
+  if (!mfaToken || !oobCode) {
+    return res.status(400).json({ message: "MFA verification data is required." });
+  }
+
+  if (updatePhone && !phoneNumber) {
+    return res.status(400).json({ message: "phoneNumber is required." });
+  }
+
+  try {
+    const params = new URLSearchParams();
+    params.set("grant_type", "http://auth0.com/oauth/grant-type/mfa-oob");
+    params.set("client_id", authConfig.clientId);
+    if (process.env.AUTH0_CLIENT_SECRET) {
+      params.set("client_secret", process.env.AUTH0_CLIENT_SECRET);
+    }
+    params.set("mfa_token", mfaToken);
+    params.set("oob_code", oobCode);
+
+    const response = await fetch(`https://${authConfig.domain}/oauth/token`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const requestId =
+        response.headers.get("x-auth0-requestid") ||
+        response.headers.get("x-request-id") ||
+        response.headers.get("x-amzn-requestid");
+      const description = String(data?.error_description || data?.message || "");
+      if (data?.error === "authorization_pending") {
+        return res.status(409).json({
+          message: "Approve the push notification in Auth0 Guardian and retry.",
+          code: "AUTH_PENDING",
+          details: {
+            status: response.status,
+            error: data?.error,
+            error_description: data?.error_description,
+            requestId,
+          },
+        });
+      }
+      console.error("Guardian verify failed", {
+        status: response.status,
+        error: data?.error,
+        error_description: data?.error_description,
+        requestId,
+      });
+      return res.status(response.status).json({
+        message: description || "Guardian verification failed.",
+        details: {
+          status: response.status,
+          error: data?.error,
+          error_description: data?.error_description,
+          requestId,
+        },
+      });
+    }
+
+    if (updatePhone) {
+      const provider = String(userId || "").split("|")[0];
+      const isRootPhoneProvider = ROOT_PHONE_PROVIDERS.has(provider);
+      const mgmtToken = await getManagementApiToken();
+      const rootPayload = {
+        phone_number: phoneNumber,
+        phone_verified: true,
+      };
+      const metadataPayload = {
+        user_metadata: {
+          phone_number: phoneNumber,
+          phone_verified: true,
+        },
+      };
+
+      const updateRootPhone = async () =>
+        fetch(`https://${authConfig.domain}/api/v2/users/${encodeURIComponent(userId)}`, {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${mgmtToken}`,
+          },
+          body: JSON.stringify(rootPayload),
+        });
+
+      const updateMetadataPhone = async () =>
+        fetch(`https://${authConfig.domain}/api/v2/users/${encodeURIComponent(userId)}`, {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${mgmtToken}`,
+          },
+          body: JSON.stringify(metadataPayload),
+        });
+
+      let updateResponse = isRootPhoneProvider
+        ? await updateRootPhone()
+        : await updateMetadataPhone();
+      let updateData = await updateResponse.json().catch(() => ({}));
+
+      if (!updateResponse.ok) {
+        const description = String(updateData?.message || updateData?.error_description || "");
+        const isDuplicatePhone =
+          description.toLowerCase().includes("phone_number already exists") ||
+          description.toLowerCase().includes("phone_number already exist");
+
+        if (isRootPhoneProvider && isDuplicatePhone) {
+          if (mfaToken && authenticatorId) {
+            try {
+              await fetch(
+                `https://${authConfig.domain}/mfa/authenticators/${encodeURIComponent(
+                  authenticatorId
+                )}`,
+                {
+                  method: "DELETE",
+                  headers: {
+                    authorization: `Bearer ${mfaToken}`,
+                  },
+                }
+              );
+            } catch {
+              // Best effort: do not block error response if cleanup fails.
+            }
+          }
+          return res.status(409).json({
+            message:
+              "Numero di telefono gia in uso per un altro account. Non e possibile utilizzare lo stesso numero.",
+            code: "PHONE_IN_USE",
+          });
+        }
+
+        const requestId =
+          updateResponse.headers.get("x-auth0-requestid") ||
+          updateResponse.headers.get("x-request-id") ||
+          updateResponse.headers.get("x-amzn-requestid");
+        console.error("Phone update failed", {
+          status: updateResponse.status,
+          error: updateData?.error,
+          message: updateData?.message,
+          requestId,
+        });
+        return res.status(updateResponse.status).json({
+          message:
+            updateData?.message ||
+            updateData?.error ||
+            "Unable to update verified phone number.",
+          details: {
+            status: updateResponse.status,
+            error: updateData?.error,
+            error_description: updateData?.error_description,
+            requestId,
+          },
+        });
+      }
+    }
+
+    return res.json({
+      message: updatePhone
+        ? "Phone number verified."
+        : "Guardian verification succeeded.",
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error?.message || "Server error." });
+  }
+});
+
 app.post("/api/mfa/enroll-sms", checkMfaJwt, async (req, res) => {
   const userId = req.auth?.payload?.sub;
   const phoneNumberRaw = (req.body?.phoneNumber || "").trim();
