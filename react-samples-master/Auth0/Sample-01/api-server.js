@@ -816,6 +816,13 @@ const findGuardianAuthenticator = (authenticators) => {
       const type = String(
         authenticator.authenticator_type || authenticator.type || ""
       ).toLowerCase();
+      const authId = String(authenticator.id || "").toLowerCase();
+      if (authId.startsWith("push|")) {
+        return true;
+      }
+      if (channel === "auth0" && type === "oob") {
+        return true;
+      }
       if (channel.includes("push")) {
         return type === "oob" || type === "guardian" || type.includes("push");
       }
