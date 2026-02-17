@@ -80,6 +80,7 @@
   justify-items: center;
   gap: 10px;
   text-align: center;
+  min-width: 0;
 }
 
 .profile-name {
@@ -91,6 +92,15 @@
   margin: 0;
   color: var(--ink-muted);
   font-size: 0.9rem;
+}
+
+.profile-name,
+.profile-email {
+  max-width: 100%;
+  justify-self: stretch;
+  text-align: center;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .profile-header {
