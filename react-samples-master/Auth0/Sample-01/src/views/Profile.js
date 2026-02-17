@@ -26,27 +26,12 @@ export const ProfileComponent = () => {
   const [editingOrderId, setEditingOrderId] = useState(null);
   const [orderDrafts, setOrderDrafts] = useState({});
   const [orderActionStatus, setOrderActionStatus] = useState({});
-  const [phoneFlow, setPhoneFlow] = useState({
-    status: "idle",
-    message: "",
-    mfaToken: "",
-    oobCode: "",
-    authenticatorId: "",
-  });
-  const phoneFlowRef = useRef({
-    status: "idle",
-    message: "",
-    mfaToken: "",
-    oobCode: "",
-    authenticatorId: "",
-  });
   const [toast, setToast] = useState(null);
   const [requiresPhoneMfa, setRequiresPhoneMfa] = useState(false);
   const [phoneEditUnlocked, setPhoneEditUnlocked] = useState(false);
   const toastTimeoutRef = useRef(null);
   // Config and constants
   const config = getConfig();
-  const MFA_SCOPE = "enroll read:authenticators remove:authenticators";
   const MFA_ACR = "http://schemas.openid.net/pape/policies/2007/06/multi-factor";
   const TOAST_TTL_MS = 4000;
 
@@ -77,39 +62,6 @@ export const ProfileComponent = () => {
     }, TOAST_TTL_MS);
   };
 
-  const openMfaPopup = () => {
-    const width = 520;
-    const height = 720;
-    const left = window.screenX + (window.outerWidth - width) / 2;
-    const top = window.screenY + (window.outerHeight - height) / 2;
-    const url = `https://${config.domain}/u/mfa`;
-    const popup = window.open(
-      url,
-      "auth0-mfa",
-      `width=${width},height=${height},left=${Math.max(left, 0)},top=${Math.max(top, 0)}`
-    );
-    if (!popup) {
-      showToast("Popup bloccato. Consenti i popup e riprova.", "error");
-    }
-    return popup;
-  };
-
-  const handleGuardianNotEnrolled = (message) => {
-    showToast(
-      message ||
-        "Auth0 Guardian non configurato. Completa la configurazione nella finestra popup e riprova.",
-      "error"
-    );
-    phoneFlowRef.current = {
-      ...phoneFlowRef.current,
-      status: "error",
-      message:
-        message ||
-        "Auth0 Guardian non configurato. Completa la configurazione nella finestra popup e riprova.",
-    };
-    openMfaPopup();
-  };
-
   useEffect(() => {
     return () => {
       if (toastTimeoutRef.current) {
@@ -117,10 +69,6 @@ export const ProfileComponent = () => {
       }
     };
   }, []);
-
-  useEffect(() => {
-    phoneFlowRef.current = phoneFlow;
-  }, [phoneFlow]);
 
   const normalizePhoneNumber = (value) => {
     const raw = (value || "").trim();
@@ -315,7 +263,7 @@ export const ProfileComponent = () => {
         : "To change your password, use your login provider settings."
     : "";
 
-  const requiresGuardianForPhone = requiresPhoneMfa;
+  const requiresMfaForPhone = requiresPhoneMfa;
 
   // Profile actions
   const handlePasswordReset = async () => {
@@ -401,13 +349,6 @@ export const ProfileComponent = () => {
             phoneVerified: false,
           }));
         }
-        setPhoneFlow({
-          status: "idle",
-          message: "",
-          mfaToken: "",
-          oobCode: "",
-          authenticatorId: "",
-        });
         setPhoneEditUnlocked(false);
       }
       setEditingField(null);
@@ -433,33 +374,16 @@ export const ProfileComponent = () => {
     setFieldValues((prev) => ({ ...prev, [fieldKey]: nextValue }));
     setEditingField(null);
     if (fieldKey === "phone_number") {
-      setPhoneFlow({
-        status: "idle",
-        message: "",
-        mfaToken: "",
-        oobCode: "",
-        authenticatorId: "",
-      });
-      phoneFlowRef.current = {
-        status: "idle",
-        message: "",
-        mfaToken: "",
-        oobCode: "",
-        authenticatorId: "",
-      };
       setPhoneVerified(phoneSnapshot.phoneVerified);
       setPhoneEditUnlocked(false);
     }
   };
 
-  // MFA phone flow
-  const requestPhoneMfaToken = async () => {
-    setPhoneFlow((prev) => ({ ...prev, status: "loading", message: "" }));
+  const requestPhoneStepUp = async () => {
     try {
-      const mfaToken = await getAccessTokenWithPopup({
+      await getAccessTokenWithPopup({
         authorizationParams: {
-          audience: `https://${config.domain}/mfa/`,
-          scope: MFA_SCOPE,
+          audience: config.audience,
           acr_values: MFA_ACR,
         },
       });
@@ -469,22 +393,7 @@ export const ProfileComponent = () => {
         delete next.phone_number;
         return next;
       });
-      setPhoneFlow((prev) => ({
-        ...prev,
-        status: "idle",
-        message: "",
-        mfaToken,
-        oobCode: "",
-        authenticatorId: "",
-      }));
-      phoneFlowRef.current = {
-        status: "idle",
-        message: "",
-        mfaToken,
-        oobCode: "",
-        authenticatorId: "",
-      };
-      return mfaToken;
+      return true;
     } catch (err) {
       const message = err?.message || "MFA required to edit phone number.";
       setFieldStatus((prev) => ({
@@ -494,19 +403,7 @@ export const ProfileComponent = () => {
           message,
         },
       }));
-      setPhoneFlow((prev) => ({
-        ...prev,
-        status: "error",
-        message,
-        mfaToken: "",
-      }));
-      phoneFlowRef.current = {
-        ...phoneFlowRef.current,
-        status: "error",
-        message,
-        mfaToken: "",
-      };
-      return "";
+      return false;
     }
   };
 
@@ -521,26 +418,14 @@ export const ProfileComponent = () => {
     }
 
     if (fieldKey === "phone_number") {
-      if (requiresGuardianForPhone) {
+      if (requiresMfaForPhone) {
         setPhoneEditUnlocked(false);
-        const token = await requestPhoneMfaToken();
-        if (!token) return;
+        const ok = await requestPhoneStepUp();
+        if (!ok) return;
+        setPhoneEditUnlocked(true);
         setEditingField(fieldKey);
-        await startGuardianChallenge(token);
         return;
       }
-      setPhoneFlow((prev) => {
-        const next = {
-          ...prev,
-          status: "idle",
-          message: "",
-          mfaToken: "",
-          oobCode: "",
-          authenticatorId: "",
-        };
-        phoneFlowRef.current = next;
-        return next;
-      });
       setPhoneEditUnlocked(true);
     }
 
@@ -570,153 +455,6 @@ export const ProfileComponent = () => {
     setPhoneSnapshot({ phoneNumber: resolvedPhoneNumber, phoneVerified: verified });
     setPhoneSnapshotReady(true);
     setFieldValues((prev) => ({ ...prev, phone_number: resolvedPhoneNumber }));
-  };
-
-  const startGuardianChallenge = async (tokenOverride) => {
-    const mfaToken = tokenOverride || phoneFlowRef.current.mfaToken || phoneFlow.mfaToken;
-    if (!mfaToken) {
-      setPhoneFlow((prev) => ({
-        ...prev,
-        status: "error",
-        message: "MFA verification is required before sending the push request.",
-      }));
-      return false;
-    }
-
-    setPhoneFlow((prev) => {
-      const next = { ...prev, status: "loading", message: "" };
-      phoneFlowRef.current = next;
-      return next;
-    });
-
-    try {
-      const apiBase = config.apiOrigin || window.location.origin;
-      const response = await fetch(`${apiBase}/api/mfa/guardian/challenge`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${mfaToken}`,
-        },
-        body: JSON.stringify({ mfaToken }),
-      });
-
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        if (data?.code === "GUARDIAN_NOT_ENROLLED") {
-          handleGuardianNotEnrolled(data?.message);
-        }
-        throw new Error(buildErrorMessage(data, "Unable to send Guardian push."));
-      }
-
-      setPhoneFlow((prev) => {
-        const next = {
-          ...prev,
-          status: "pending",
-          message:
-            "Approva la notifica su Auth0 Guardian per sbloccare la modifica del numero.",
-          mfaToken,
-          oobCode: data?.oobCode || "",
-          authenticatorId: data?.authenticatorId || "",
-        };
-        phoneFlowRef.current = next;
-        return next;
-      });
-      return true;
-    } catch (err) {
-      setPhoneFlow((prev) => {
-        const next = {
-          ...prev,
-          status: "error",
-          message: err?.message || "Unable to send Guardian push.",
-        };
-        phoneFlowRef.current = next;
-        return next;
-      });
-      return false;
-    }
-  };
-
-  const verifyGuardianApproval = async () => {
-    const current = phoneFlowRef.current;
-    if (!current.oobCode) {
-      setPhoneFlow((prev) => {
-        const next = {
-          ...prev,
-          status: "error",
-          message: "Push verification is required before continuing.",
-        };
-        phoneFlowRef.current = next;
-        return next;
-      });
-      return;
-    }
-
-    setPhoneFlow((prev) => {
-      const next = { ...prev, status: "verifying", message: "" };
-      phoneFlowRef.current = next;
-      return next;
-    });
-
-    try {
-      const apiBase = config.apiOrigin || window.location.origin;
-      const response = await fetch(`${apiBase}/api/mfa/guardian/verify`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${current.mfaToken}`,
-        },
-        body: JSON.stringify({
-          mfaToken: current.mfaToken,
-          oobCode: current.oobCode,
-          authenticatorId: current.authenticatorId,
-          updatePhone: false,
-        }),
-      });
-
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        if (data?.code === "GUARDIAN_NOT_ENROLLED") {
-          handleGuardianNotEnrolled(data?.message);
-          return;
-        }
-        if (data?.code === "AUTH_PENDING") {
-          setPhoneFlow((prev) => {
-            const next = {
-              ...prev,
-              status: "pending",
-              message:
-                data?.message ||
-                "Approva la notifica su Auth0 Guardian e poi clicca Verifica.",
-            };
-            phoneFlowRef.current = next;
-            return next;
-          });
-          return;
-        }
-        throw new Error(buildErrorMessage(data, "Guardian verification failed."));
-      }
-
-      setPhoneEditUnlocked(true);
-      setPhoneFlow((prev) => {
-        const next = {
-          ...prev,
-          status: "success",
-          message: "Autorizzazione completata. Ora puoi modificare il numero.",
-        };
-        phoneFlowRef.current = next;
-        return next;
-      });
-    } catch (err) {
-      setPhoneFlow((prev) => {
-        const next = {
-          ...prev,
-          status: "error",
-          message: err?.message || "Guardian verification failed.",
-        };
-        phoneFlowRef.current = next;
-        return next;
-      });
-    }
   };
 
   // Orders management (admin)
@@ -1007,7 +745,7 @@ export const ProfileComponent = () => {
                             placeholder={field.placeholder}
                             disabled={
                               field.key === "phone_number" &&
-                              requiresGuardianForPhone &&
+                              requiresMfaForPhone &&
                               !phoneEditUnlocked
                             }
                             onChange={(event) => {
@@ -1036,110 +774,23 @@ export const ProfileComponent = () => {
                               }
                             }}
                           />
-                          {field.key === "phone_number" ? (
-                            requiresGuardianForPhone ? (
-                              !phoneEditUnlocked ? (
-                                <>
-                                  <div className="field-note">
-                                    Approva la notifica su Auth0 Guardian per sbloccare la
-                                    modifica del numero.
-                                  </div>
-                                  <div className="field-edit-actions">
-                                    <button
-                                      className="field-save-button"
-                                      onClick={verifyGuardianApproval}
-                                      disabled={
-                                        phoneFlow.status === "verifying" ||
-                                        phoneFlow.status === "loading" ||
-                                        !phoneFlow.oobCode
-                                      }
-                                      type="button"
-                                    >
-                                      {phoneFlow.status === "verifying"
-                                        ? "Verifying..."
-                                        : "Verify"}
-                                    </button>
-                                    <button
-                                      className="field-cancel-button"
-                                      onClick={() => startGuardianChallenge()}
-                                      disabled={phoneFlow.status === "loading"}
-                                      type="button"
-                                    >
-                                      {phoneFlow.status === "loading"
-                                        ? "Sending..."
-                                        : "Resend Push"}
-                                    </button>
-                                    <button
-                                      className="field-cancel-button"
-                                      onClick={() => handleCancelEdit(field.key)}
-                                      type="button"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                  {phoneFlow.message ? (
-                                    <div className={`field-status ${phoneFlow.status}`}>
-                                      {phoneFlow.message}
-                                    </div>
-                                  ) : null}
-                                </>
-                              ) : (
-                                <div className="field-edit-actions">
-                                  <button
-                                    className="field-save-button"
-                                    onClick={() => handleFieldSave(field.key)}
-                                    disabled={status?.status === "loading"}
-                                    type="button"
-                                  >
-                                    {status?.status === "loading" ? "Saving..." : "Save"}
-                                  </button>
-                                  <button
-                                    className="field-cancel-button"
-                                    onClick={() => handleCancelEdit(field.key)}
-                                    type="button"
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                              )
-                            ) : (
-                              <div className="field-edit-actions">
-                                <button
-                                  className="field-save-button"
-                                  onClick={() => handleFieldSave(field.key)}
-                                  disabled={status?.status === "loading"}
-                                  type="button"
-                                >
-                                  {status?.status === "loading" ? "Saving..." : "Save"}
-                                </button>
-                                <button
-                                  className="field-cancel-button"
-                                  onClick={() => handleCancelEdit(field.key)}
-                                  type="button"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            )
-                          ) : (
-                            <div className="field-edit-actions">
-                              <button
-                                className="field-save-button"
-                                onClick={() => handleFieldSave(field.key)}
-                                disabled={status?.status === "loading"}
-                                type="button"
-                              >
-                                {status?.status === "loading" ? "Saving..." : "Save"}
-                              </button>
-                              <button
-                                className="field-cancel-button"
-                                onClick={() => handleCancelEdit(field.key)}
-                                type="button"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          )}
+                          <div className="field-edit-actions">
+                            <button
+                              className="field-save-button"
+                              onClick={() => handleFieldSave(field.key)}
+                              disabled={status?.status === "loading"}
+                              type="button"
+                            >
+                              {status?.status === "loading" ? "Saving..." : "Save"}
+                            </button>
+                            <button
+                              className="field-cancel-button"
+                              onClick={() => handleCancelEdit(field.key)}
+                              type="button"
+                            >
+                              Cancel
+                            </button>
+                          </div>
                         </div>
                       ) : null}
 
