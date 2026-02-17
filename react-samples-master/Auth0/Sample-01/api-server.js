@@ -835,16 +835,31 @@ app.post("/api/mfa/guardian/challenge", checkMfaJwt, async (req, res) => {
   const userId = req.auth?.payload?.sub;
   const bodyToken = (req.body?.mfaToken || "").trim();
   const mfaToken = bodyToken || getBearerToken(req);
+  const debugMfa = process.env.DEBUG_MFA === "true";
+  const debugPayload = debugMfa
+    ? {
+        userId,
+        authHeader: req.headers?.authorization || "",
+        bodyToken,
+        resolvedToken: mfaToken,
+      }
+    : null;
 
   if (!userId) {
     return res.status(400).json({ message: "User id not available." });
   }
 
   if (!mfaToken) {
+    if (debugMfa) {
+      console.log("MFA DEBUG /challenge - missing token", debugPayload);
+    }
     return res.status(400).json({ message: "MFA token is required." });
   }
 
   try {
+    if (debugMfa) {
+      console.log("MFA DEBUG /challenge - incoming", debugPayload);
+    }
     const listResponse = await fetch(`https://${authConfig.domain}/mfa/authenticators`, {
       headers: {
         authorization: `Bearer ${mfaToken}`,
@@ -884,6 +899,7 @@ app.post("/api/mfa/guardian/challenge", checkMfaJwt, async (req, res) => {
       },
       body: JSON.stringify({
         client_id: authConfig.clientId,
+        mfa_token: mfaToken,
         challenge_type: "oob",
         authenticator_id: guardianAuth.id,
       }),
@@ -900,6 +916,7 @@ app.post("/api/mfa/guardian/challenge", checkMfaJwt, async (req, res) => {
         error: challengeData?.error,
         error_description: challengeData?.error_description,
         requestId,
+        debugMfa: debugPayload || undefined,
       });
       return res.status(challengeResponse.status).json({
         message:
@@ -911,6 +928,7 @@ app.post("/api/mfa/guardian/challenge", checkMfaJwt, async (req, res) => {
           error: challengeData?.error,
           error_description: challengeData?.error_description,
           requestId,
+          ...(debugMfa ? { debugMfa: debugPayload } : null),
         },
       });
     }
@@ -918,6 +936,7 @@ app.post("/api/mfa/guardian/challenge", checkMfaJwt, async (req, res) => {
     return res.json({
       oobCode: challengeData?.oob_code,
       authenticatorId: guardianAuth.id,
+      ...(debugMfa ? { debugMfa: debugPayload } : null),
     });
   } catch (error) {
     return res.status(500).json({ message: error?.message || "Server error." });
@@ -932,12 +951,27 @@ app.post("/api/mfa/guardian/verify", checkMfaJwt, async (req, res) => {
   const authenticatorId = (req.body?.authenticatorId || "").trim();
   const phoneNumber = (req.body?.phoneNumber || "").trim();
   const updatePhone = req.body?.updatePhone !== false;
+  const debugMfa = process.env.DEBUG_MFA === "true";
+  const debugPayload = debugMfa
+    ? {
+        userId,
+        authHeader: req.headers?.authorization || "",
+        bodyToken,
+        resolvedToken: mfaToken,
+        oobCode,
+        authenticatorId,
+        updatePhone,
+      }
+    : null;
 
   if (!userId) {
     return res.status(400).json({ message: "User id not available." });
   }
 
   if (!mfaToken || !oobCode) {
+    if (debugMfa) {
+      console.log("MFA DEBUG /verify - missing data", debugPayload);
+    }
     return res.status(400).json({ message: "MFA verification data is required." });
   }
 
@@ -946,6 +980,9 @@ app.post("/api/mfa/guardian/verify", checkMfaJwt, async (req, res) => {
   }
 
   try {
+    if (debugMfa) {
+      console.log("MFA DEBUG /verify - incoming", debugPayload);
+    }
     const params = new URLSearchParams();
     params.set("grant_type", "http://auth0.com/oauth/grant-type/mfa-oob");
     params.set("client_id", authConfig.clientId);
