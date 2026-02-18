@@ -16,19 +16,19 @@ const MainPageAfterLogin = () => {
     }
   });
   const [cartVisible, setCartVisible] = useState(false);
-  const [activeCategory, setActiveCategory] = useState("idg");
+  const [activeCategory, setActiveCategory] = useState("IGA");
 
   const [serviceValues, setServiceValues] = useState({});
 
   const categories = [
-    { id: "idg", label: "Identity Governance", tooltip: "Manage user lifecycle, compliance and identity policies." },
+    { id: "IGA", label: "Identity Governance", tooltip: "Manage user lifecycle, compliance and identity policies." },
     { id: "am", label: "Access Management", tooltip: "Define access with roles, SSO, and MFA." },
     { id: "pam", label: "Privileged Identity", tooltip: "Secure, monitor, and control privileged accounts." },
     { id: "ciam", label: "CIAM", tooltip: "Customer login, registration, and self-service profiles." },
   ];
 
   const servicesData = {
-    idg: [
+    IGA: [
       { title: "User Lifecycle Management", description: "Create, modify and deactivate user accounts.", users: 5000 },
       { title: "Access Certification", description: "Periodic review of user access rights.", users: 1000 },
     ],
@@ -157,8 +157,8 @@ const MainPageAfterLogin = () => {
               <input
                 type="range"
                 min="1"
-                max="1000000"
-                step="1000"
+                max="100000"
+                step="100"
                 className="service-range"
                 value={serviceValues[service.title]?.users || service.users}
                 style={{

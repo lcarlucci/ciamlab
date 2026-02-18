@@ -270,14 +270,6 @@ export const ProfileComponent = () => {
     loadMetadata();
   }, [currentUser, editableFields, getAccessTokenSilently, config.audience, config.apiOrigin]);
 
-  const providerMessage = !isDbUser
-    ? provider === "google-oauth2"
-      ? "To change your password, go to your Google account settings."
-      : provider === "facebook"
-        ? "To change your password, go to your Facebook account settings."
-        : "To change your password, use your login provider settings."
-    : "";
-
   // Profile actions
   const handlePasswordReset = async () => {
     if (!email) {
@@ -625,26 +617,23 @@ export const ProfileComponent = () => {
           </div>
           <h2 className="profile-name">{displayName}</h2>
           <p className="profile-email">{displayEmail}</p>
-          <div className="profile-actions">
-            <button
-              className="reset-password-button"
-              onClick={handlePasswordReset}
-              disabled={resetState.status === "loading" || !email || !isDbUser}
-              type="button"
-            >
-              {resetState.status === "loading" ? "Sending..." : "Change password"}
-            </button>
-            {providerMessage ? (
-              <div className="reset-password-status info">
-                {providerMessage}
-              </div>
-            ) : null}
-            {resetState.message ? (
-              <div className={`reset-password-status ${resetState.status}`}>
-                {resetState.message}
-              </div>
-            ) : null}
-          </div>
+          {isDbUser ? (
+            <div className="profile-actions">
+              <button
+                className="reset-password-button"
+                onClick={handlePasswordReset}
+                disabled={resetState.status === "loading" || !email}
+                type="button"
+              >
+                {resetState.status === "loading" ? "Sending..." : "Change password"}
+              </button>
+              {resetState.message ? (
+                <div className={`reset-password-status ${resetState.status}`}>
+                  {resetState.message}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </aside>
 
         <div className="profile-details">
