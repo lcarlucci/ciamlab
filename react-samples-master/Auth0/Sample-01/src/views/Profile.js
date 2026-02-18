@@ -9,7 +9,7 @@ const DEBUG_BYPASS_AUTH = false;
 const PASSWORD_RESET_CONNECTION = "Username-Password-Authentication";
 
 export const ProfileComponent = () => {
-  const { user, getAccessTokenSilently, getAccessTokenWithPopup } = useAuth0();
+  const { user, getAccessTokenSilently } = useAuth0();
   // State
   const [resetState, setResetState] = useState({ status: "idle", message: "" });
   const [editingField, setEditingField] = useState(null);
@@ -27,12 +27,9 @@ export const ProfileComponent = () => {
   const [orderDrafts, setOrderDrafts] = useState({});
   const [orderActionStatus, setOrderActionStatus] = useState({});
   const [toast, setToast] = useState(null);
-  const [requiresPhoneMfa, setRequiresPhoneMfa] = useState(false);
-  const [phoneEditUnlocked, setPhoneEditUnlocked] = useState(false);
   const toastTimeoutRef = useRef(null);
   // Config and constants
   const config = getConfig();
-  const MFA_ACR = "http://schemas.openid.net/pape/policies/2007/06/multi-factor";
   const TOAST_TTL_MS = 4000;
 
   // Utilities
@@ -110,9 +107,6 @@ export const ProfileComponent = () => {
       return normalized === "administrator" || normalized === "administator";
     });
 
-  const hasMfaRole = (roles) =>
-    roles.some((role) => String(role || "").trim().toLowerCase() === "ciam demo mfa");
-
   // User context
   const mockUser = {
     picture: process.env.PUBLIC_URL + "/assets/placeholder.png",
@@ -132,6 +126,23 @@ export const ProfileComponent = () => {
   const avatarSeed = currentUser?.name || currentUser?.email || "";
   const avatarInitial = getInitial(currentUser?.name, currentUser?.email);
   const avatarColor = getAvatarColor(avatarSeed);
+
+  const formatNameFromEmail = (emailValue) => {
+    const local = String(emailValue || "").split("@")[0].trim();
+    if (!local) return "";
+    if (local.includes(".")) {
+      return local
+        .split(".")
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+        .join(" ");
+    }
+    return local.charAt(0).toUpperCase() + local.slice(1);
+  };
+
+  const displayName =
+    currentUser?.name || formatNameFromEmail(email) || "User";
+  const displayEmail = email || "Email not available";
 
   const editableFields = useMemo(
     () => [
@@ -189,9 +200,7 @@ export const ProfileComponent = () => {
         const payloadRoles = getRolesFromPayload(payload);
         const hasPayloadRoles = payloadRoles.length > 0;
         const tokenAdmin = hasAdminRole(payloadRoles);
-        const tokenMfa = hasMfaRole(payloadRoles);
         setIsAdmin(tokenAdmin);
-        setRequiresPhoneMfa(tokenMfa);
 
         const apiBase = config.apiOrigin || window.location.origin;
         const response = await fetch(`${apiBase}/api/user/profile`, {
@@ -237,7 +246,6 @@ export const ProfileComponent = () => {
           const rolesData = await rolesResponse.json().catch(() => ({}));
           if (rolesResponse.ok && Array.isArray(rolesData.roles)) {
             setIsAdmin(hasAdminRole(rolesData.roles));
-            setRequiresPhoneMfa(hasMfaRole(rolesData.roles));
           }
         }
       } catch (err) {
@@ -262,8 +270,6 @@ export const ProfileComponent = () => {
         ? "To change your password, go to your Facebook account settings."
         : "To change your password, use your login provider settings."
     : "";
-
-  const requiresMfaForPhone = requiresPhoneMfa;
 
   // Profile actions
   const handlePasswordReset = async () => {
@@ -349,7 +355,6 @@ export const ProfileComponent = () => {
             phoneVerified: false,
           }));
         }
-        setPhoneEditUnlocked(false);
       }
       setEditingField(null);
     } catch (err) {
@@ -375,35 +380,6 @@ export const ProfileComponent = () => {
     setEditingField(null);
     if (fieldKey === "phone_number") {
       setPhoneVerified(phoneSnapshot.phoneVerified);
-      setPhoneEditUnlocked(false);
-    }
-  };
-
-  const requestPhoneStepUp = async () => {
-    try {
-      await getAccessTokenWithPopup({
-        authorizationParams: {
-          audience: config.audience,
-          acr_values: MFA_ACR,
-        },
-      });
-      setFieldStatus((prev) => {
-        if (!prev.phone_number) return prev;
-        const next = { ...prev };
-        delete next.phone_number;
-        return next;
-      });
-      return true;
-    } catch (err) {
-      const message = err?.message || "MFA required to edit phone number.";
-      setFieldStatus((prev) => ({
-        ...prev,
-        phone_number: {
-          status: "error",
-          message,
-        },
-      }));
-      return false;
     }
   };
 
@@ -415,18 +391,6 @@ export const ProfileComponent = () => {
         setEditingField(null);
       }
       return;
-    }
-
-    if (fieldKey === "phone_number") {
-      if (requiresMfaForPhone) {
-        setPhoneEditUnlocked(false);
-        const ok = await requestPhoneStepUp();
-        if (!ok) return;
-        setPhoneEditUnlocked(true);
-        setEditingField(fieldKey);
-        return;
-      }
-      setPhoneEditUnlocked(true);
     }
 
     setEditingField(fieldKey);
@@ -652,8 +616,8 @@ export const ProfileComponent = () => {
           >
             {avatarInitial}
           </div>
-          <h2 className="profile-name">{currentUser?.name || "User"}</h2>
-          <p className="profile-email">{currentUser?.email || "Email not available"}</p>
+          <h2 className="profile-name">{displayName}</h2>
+          <p className="profile-email">{displayEmail}</p>
           <div className="profile-actions">
             <button
               className="reset-password-button"
@@ -743,11 +707,6 @@ export const ProfileComponent = () => {
                             type="text"
                             value={value}
                             placeholder={field.placeholder}
-                            disabled={
-                              field.key === "phone_number" &&
-                              requiresMfaForPhone &&
-                              !phoneEditUnlocked
-                            }
                             onChange={(event) => {
                               const nextValue = event.target.value;
                               setFieldValues((prev) => ({
