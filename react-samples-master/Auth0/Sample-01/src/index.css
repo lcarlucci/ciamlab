@@ -6,7 +6,18 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+body,
+button,
+input,
+select,
+textarea {
+  font-family: "Aptos", "Segoe UI", sans-serif;
+}
+
+* {
+  font-family: inherit;
+}
+
 code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
-    monospace;
+  font-family: inherit;
 }

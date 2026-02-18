@@ -62,6 +62,6 @@
 .info-card,
 .info-card h3,
 .info-card p {
-  font-family: "Aptos";
+  font-family: inherit;
 }
 
