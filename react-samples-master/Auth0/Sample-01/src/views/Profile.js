@@ -140,9 +140,16 @@ export const ProfileComponent = () => {
     return local.charAt(0).toUpperCase() + local.slice(1);
   };
 
-  const displayName =
-    currentUser?.name || formatNameFromEmail(email) || "User";
-  const displayEmail = email || "Email not available";
+  const rawName = String(currentUser?.name || "").trim();
+  const emailValue = String(email || "").trim();
+  const isEmailName =
+    rawName &&
+    (rawName.includes("@") ||
+      (emailValue && rawName.toLowerCase() === emailValue.toLowerCase()));
+  const displayName = isEmailName || !rawName
+    ? formatNameFromEmail(emailValue) || "User"
+    : rawName;
+  const displayEmail = emailValue || "Email not available";
 
   const editableFields = useMemo(
     () => [
