@@ -1366,8 +1366,3 @@ export const ProfileComponent = () => {
 export default withAuthenticationRequired(ProfileComponent, {
   onRedirecting: () => <Loading />,
 });
-
-
-
-
-
