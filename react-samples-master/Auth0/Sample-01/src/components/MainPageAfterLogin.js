@@ -165,10 +165,10 @@ const MainPageAfterLogin = () => {
                   background: getRangeBackground(
                     Number(serviceValues[service.title]?.users || service.users),
                     1,
-                    1000000
+                    100000
                   )
                 }}
-                onChange={(e) => handleSliderChange(service.title, e.target.value)}
+                onChange={(e) => handleSliderChange(service.title, Number(e.target.value))}
               />
 
               <label>Implementation type</label>
