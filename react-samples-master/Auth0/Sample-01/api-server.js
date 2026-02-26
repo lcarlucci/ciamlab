@@ -1095,12 +1095,12 @@ app.delete("/api/admin/orders/:orderId", checkApiJwt, async (req, res) => {
 // ----------------------------
 // Static app hosting
 // ----------------------------
-// Serve i file statici di React
-app.use(express.static(path.join(__dirname, "build1")));
+// Serve i file statici di React (cartella build standard)
+app.use(express.static(path.join(__dirname, "build")));
 
 // Fallback per SPA: tutte le richieste non API vanno a index.html
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "build1", "index.html"));
+  res.sendFile(path.join(__dirname, "build", "index.html"));
 });
 
 app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));

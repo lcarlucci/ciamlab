@@ -17,10 +17,91 @@ export const ExternalApiComponent = () => {
   });
   const [tokenPayload, setTokenPayload] = useState(null);
   const [tokenHeader, setTokenHeader] = useState(null);
+  const [rawToken, setRawToken] = useState("");
   const [tokenError, setTokenError] = useState("");
 
   const { getAccessTokenSilently, loginWithPopup, getAccessTokenWithPopup } =
     useAuth0();
+
+  const tokenFieldLibrary = {
+    iss: {
+      title: "Issuer (iss)",
+      description: "Auth0 tenant that signs the token and vouches for the user.",
+    },
+    sub: {
+      title: "Subject (sub)",
+      description: "The unique user identifier. It never changes and is safe for mapping.",
+    },
+    aud: {
+      title: "Audience (aud)",
+      description: "The API this token is meant for. Protects against token replay elsewhere.",
+    },
+    exp: {
+      title: "Expires (exp)",
+      description: "UNIX time when the token stops being valid. Short-lived keeps risk low.",
+    },
+    iat: {
+      title: "Issued At (iat)",
+      description: "Moment Auth0 minted the token. Helps trace sessions and support tickets.",
+    },
+    scope: {
+      title: "Scope",
+      description: "Fine-grained permissions the calling app requested (e.g., read:orders).",
+    },
+    permissions: {
+      title: "Permissions",
+      description: "API-level grants enforced by Auth0 RBAC. Use to drive authorization checks.",
+    },
+    azp: {
+      title: "Authorized Party (azp)",
+      description: "The client that asked for the token. Guards multi-app ecosystems.",
+    },
+    kid: {
+      title: "Key Id (kid)",
+      description: "Tells the API which Auth0 signing key to trust when validating the signature.",
+    },
+    alg: {
+      title: "Algorithm (alg)",
+      description: "Cryptographic algorithm securing the JWT. Defaults to RS256 for Auth0 APIs.",
+    },
+    typ: {
+      title: "Type (typ)",
+      description: "Declares this is a JWT. Makes intent explicit for downstream services.",
+    },
+  };
+
+  const formatUnixTime = (unix) => {
+    if (!unix) return "n/d";
+    return new Date(unix * 1000).toLocaleString();
+  };
+
+  const formatValue = (value) => {
+    if (Array.isArray(value)) return value.join(", ");
+    if (typeof value === "object" && value !== null) return JSON.stringify(value, null, 2);
+    return String(value);
+  };
+
+  const renderTokenGrid = (data, label) => (
+    <div className="token-grid">
+      {Object.entries(data || {}).map(([key, value]) => {
+        const meta =
+          tokenFieldLibrary[key] || {
+            title: key,
+            description: "Custom claim injected by your API, Rule, or Action.",
+          };
+        return (
+          <div className="token-field" key={`${label}-${key}`}>
+            <div className="field-key">{meta.title}</div>
+            <div className="field-value">{formatValue(value)}</div>
+            <div className="field-tooltip">
+              <p className="tooltip-title">{meta.title}</p>
+              <p className="tooltip-body">{meta.description}</p>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 
   const handleConsent = async () => {
     try {
@@ -76,44 +157,45 @@ export const ExternalApiComponent = () => {
   };
 
   const callApi = async () => {
-  try {
-    const token = await getAccessTokenSilently({
-      audience: "https://ciamlab.onrender.com/api",
-      scope: "openid profile email",
-
-    });
-
     try {
-      const decoded = decodeJwt(token);
-      setTokenHeader(decoded.header);
-      setTokenPayload(decoded.payload);
-      setTokenError("");
-    } catch (err) {
-      setTokenHeader(null);
-      setTokenPayload(null);
-      setTokenError(err?.message || "Unable to decode token.");
-    }
+      const token = await getAccessTokenSilently({
+        audience: "https://ciamlab.onrender.com/api",
+        scope: "openid profile email",
+      });
 
-    const response = await fetch(`${apiBase}/api/external`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
+      setRawToken(token);
+
+      try {
+        const decoded = decodeJwt(token);
+        setTokenHeader(decoded.header);
+        setTokenPayload(decoded.payload);
+        setTokenError("");
+      } catch (err) {
+        setTokenHeader(null);
+        setTokenPayload(null);
+        setTokenError(err?.message || "Unable to decode token.");
       }
-    });
 
-    const responseData = await response.json();
+      const response = await fetch(`${apiBase}/api/external`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-    setState({
-      ...state,
-      showResult: true,
-      apiMessage: responseData,
-    });
-  } catch (error) {
-    setState({
-      ...state,
-      error: error.error || error.message,
-    });
-  }
-};
+      const responseData = await response.json();
+
+      setState({
+        ...state,
+        showResult: true,
+        apiMessage: responseData,
+      });
+    } catch (error) {
+      setState({
+        ...state,
+        error: error.error || error.message,
+      });
+    }
+  };
 
 
   const handle = (e, fn) => {
@@ -128,7 +210,8 @@ export const ExternalApiComponent = () => {
           <span className="api-eyebrow">API Workspace</span>
           <h1>External API</h1>
           <p className="lead">
-            Ping an external API by clicking the button below.
+            Richiedi un access token reale, validato da Auth0, e guardalo
+            trasformarsi in un racconto visivo di sicurezza e governance.
           </p>
         </div>
         <div className="api-hero-actions">
@@ -137,8 +220,9 @@ export const ExternalApiComponent = () => {
             onClick={callApi}
             disabled={!audience}
           >
-            Ping API
+            Ping API &amp; genera token
           </Button>
+          <p className="micro-copy">Demo live: nessun mock, solo il tuo JWT firmato.</p>
         </div>
       </div>
 
@@ -226,25 +310,82 @@ export const ExternalApiComponent = () => {
       <div className="result-block-container">
         {state.showResult && (
           <div className="result-block" data-testid="api-result">
-            <h6 className="muted">API Response</h6>
+            <div className="result-header">
+              <h6 className="muted">API Response</h6>
+              <span className="chip success">LIVE</span>
+            </div>
             <Highlight>
               <span>{JSON.stringify(state.apiMessage, null, 2)}</span>
             </Highlight>
           </div>
         )}
+
         {state.showResult && (
-          <div className="result-block" data-testid="jwt-result">
-            <h6 className="muted">Decoded JWT</h6>
-            {tokenError ? (
-              <Highlight>
-                <span>{tokenError}</span>
-              </Highlight>
-            ) : (
-              <Highlight>
-                <span>{JSON.stringify({ header: tokenHeader, payload: tokenPayload }, null, 2)}</span>
-              </Highlight>
-            )}
-          </div>
+          <section className="token-explainer" data-testid="jwt-result">
+            <div className="token-explainer-copy">
+              <p className="tagline">Token Experience</p>
+              <h3>Il tuo token, spiegato come una storia di fiducia.</h3>
+              <p>
+                Ogni claim del JWT è una promessa firmata da Auth0: identità certa, permessi mirati,
+                scadenze brevi e chiavi ruotate. Passa con il mouse per scoprire come ciascun campo
+                protegge il tuo prodotto e riduce attriti di onboarding.
+              </p>
+              <ul className="selling-points">
+                <li><strong>Vendita pronto-uso:</strong> mostra ai clienti come il token sigilla dati e permessi.</li>
+                <li><strong>Zero trust:</strong> audience dedicate + scadenze corte per bloccare riuso eccessivo.</li>
+                <li><strong>Dev friendly:</strong> format JSON leggibile, facile da provare e loggare.</li>
+              </ul>
+              <div className="token-badges">
+                <span className="chip">Rotazione chiavi</span>
+                <span className="chip">RBAC &amp; scope</span>
+                <span className="chip">Telemetry pronta</span>
+              </div>
+            </div>
+
+            <div className="token-visual">
+              <div className="token-ticket">
+                <div className="ticket-header">
+                  <span className="pill">Auth0 Access Token</span>
+                  <span className="pill ghost">exp {formatUnixTime(tokenPayload?.exp)}</span>
+                  <span className="pill ghost">aud {tokenPayload?.aud || audience || "n/d"}</span>
+                </div>
+                <div className="ticket-body">
+                  <p className="ticket-label">Raw JWT (troncato per sicurezza)</p>
+                  <Highlight>
+                    <span className="raw-token-text">
+                      {rawToken
+                        ? `${rawToken.slice(0, 38)} ... ${rawToken.slice(-18)}`
+                        : "Premi \"Ping API\" per ottenere un token reale."}
+                    </span>
+                  </Highlight>
+                </div>
+              </div>
+
+              {tokenError ? (
+                <Highlight>
+                  <span>{tokenError}</span>
+                </Highlight>
+              ) : (
+                <>
+                  <div className="token-section">
+                    <div className="section-header">
+                      <span className="section-title">Header</span>
+                      <span className="section-hint">Firma + algoritmo + key id</span>
+                    </div>
+                    {renderTokenGrid(tokenHeader, "header")}
+                  </div>
+
+                  <div className="token-section">
+                    <div className="section-header">
+                      <span className="section-title">Payload</span>
+                      <span className="section-hint">Identità, permessi e policy temporale</span>
+                    </div>
+                    {renderTokenGrid(tokenPayload, "payload")}
+                  </div>
+                </>
+              )}
+            </div>
+          </section>
         )}
       </div>
     </div>
