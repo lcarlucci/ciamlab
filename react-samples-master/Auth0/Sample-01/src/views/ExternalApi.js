@@ -32,59 +32,59 @@ export const ExternalApiComponent = () => {
   const tokenFieldLibrary = {
     iss: {
       title: "Issuer (iss)",
-      description: "Tenant o server che ha emesso il token; l’API verifica che combaci col dominio Auth0 previsto.",
+      description: "Chi emette il token. Deve combaciare con il dominio Auth0 atteso, altrimenti l'API lo rifiuta.",
     },
     sub: {
       title: "Subject (sub)",
-      description: "Identificativo univoco dell’utente presso l’issuer; usalo come chiave stabile per i profili.",
+      description: "Identificativo univoco dell'utente nell'issuer. E stabile e ideale come chiave tecnica di profilo.",
     },
     aud: {
       title: "Audience (aud)",
-      description: "Destinatari previsti (API). Se l’API non è nell’audience deve rifiutare il token.",
+      description: "API destinatarie. Se la tua API non e presente, il token non e valido per quella risorsa.",
     },
     exp: {
       title: "Expires (exp)",
-      description: "Epoch second di scadenza: oltre questa data il token non è più valido.",
+      description: "Istante di scadenza (epoch seconds). Dopo questo momento l'API deve rifiutare il token.",
     },
     iat: {
       title: "Issued At (iat)",
-      description: "Timestamp di emissione. Utile per audit e correlazione con i log di login.",
+      description: "Momento di emissione. Utile per audit, debugging e correlazione con i log di login.",
     },
     nbf: {
       title: "Not Before (nbf)",
-      description: "Il token diventa valido solo da questo istante; blocca utilizzi anticipati.",
+      description: "Il token e valido solo dopo questo istante. Serve a bloccare utilizzi anticipati.",
     },
     scope: {
       title: "Scope",
-      description: "Permessi granulari richiesti dal client (es. read:orders). L’API deve verificarli.",
+      description: "Permessi richiesti dal client (es. read:orders). L'API deve controllarli per autorizzare.",
     },
     permissions: {
       title: "Permissions",
-      description: "Permessi RBAC calcolati per questa audience; consigliati per gli authorization check.",
+      description: "Permessi RBAC calcolati da Auth0 per questa audience. Usali per i check di autorizzazione.",
     },
     azp: {
       title: "Authorized Party (azp)",
-      description: "Client che ha ottenuto il token (caller). Utile in ecosistemi multi-app.",
+      description: "Client che ha ottenuto il token. Importante per tracciare chi sta chiamando l'API.",
     },
     kid: {
       title: "Key Id (kid)",
-      description: "Identificatore della chiave di firma. L’API scarica il JWKS Auth0 e usa il kid per validare.",
+      description: "Identificatore della chiave di firma. L'API scarica il JWKS e usa il kid per validare.",
     },
     alg: {
       title: "Algorithm (alg)",
-      description: "Algoritmo di firma (es. RS256). L’API deve accettare solo quelli consentiti.",
+      description: "Algoritmo di firma (es. RS256). L'API deve accettare solo quelli previsti.",
     },
     typ: {
       title: "Type (typ)",
-      description: "Tipo di token (tipicamente JWT).",
+      description: "Tipo di token (tipicamente JWT). Aiuta i consumer a interpretarlo correttamente.",
     },
     jti: {
       title: "JWT ID (jti)",
-      description: "Identificatore univoco di questa istanza; aiuta a prevenire replay (deny/allow list).",
+      description: "Identificatore univoco del token. Utile per prevenire replay (deny/allow list).",
     },
     auth_time: {
       title: "Auth Time",
-      description: "Momento dell’ultima autenticazione interattiva; utile per MFA/step-up.",
+      description: "Momento dell'ultima autenticazione interattiva. Utile per MFA o step-up.",
     },
   };
 
@@ -97,6 +97,18 @@ export const ExternalApiComponent = () => {
     if (Array.isArray(value)) return value.join(", ");
     if (typeof value === "object" && value !== null) return JSON.stringify(value, null, 2);
     return String(value);
+  };
+
+  const truncateToken = (token, head = 48, tail = 24) => {
+    if (!token) return "";
+    if (token.length <= head + tail + 3) return token;
+    return `${token.slice(0, head)}...${token.slice(-tail)}`;
+  };
+
+  const truncateChunk = (chunk, head = 24, tail = 10) => {
+    if (!chunk) return "";
+    if (chunk.length <= head + tail + 3) return chunk;
+    return `${chunk.slice(0, head)}...${chunk.slice(-tail)}`;
   };
 
   const renderTokenGrid = (data, label) => (
@@ -145,6 +157,164 @@ export const ExternalApiComponent = () => {
         );
       })}
     </div>
+  );
+
+  const JwtExperience = () => (
+    <section className="token-explainer" data-testid="jwt-result">
+      <div className="token-explainer-copy">
+        <div className="jwt-intro">
+          <p className="tagline">JWT Fundamentals</p>
+          <h3>Cos'e un JSON Web Token (JWT)</h3>
+          <p>
+            Un JWT e un token firmato che trasporta informazioni (claim) in modo compatto e
+            verificabile. Non cifra i dati: li rende tamper-proof grazie alla firma. Per questo
+            va sempre usato su canali sicuri (HTTPS) e con scadenze brevi.
+          </p>
+          <ul className="intro-points">
+            <li><strong>Integrita e autenticita:</strong> la firma dimostra che il token non e stato alterato.</li>
+            <li><strong>Controllo dell'accesso:</strong> aud, exp, nbf e scope riducono il rischio di abuso.</li>
+            <li><strong>Autorizzazioni chiare:</strong> permissions e scope abilitano policy granulari lato API.</li>
+            <li><strong>Performance:</strong> si valida localmente senza chiamare l'IdP a ogni richiesta.</li>
+          </ul>
+          <div className="structure-bar">
+            <span className="structure-pill">Header</span>
+            <span className="dot-sep">.</span>
+            <span className="structure-pill">Payload</span>
+            <span className="dot-sep">.</span>
+            <span className="structure-pill">Signature</span>
+          </div>
+        </div>
+
+        <div className="raw-jwt-panel">
+          <div className="panel-head">
+            <span className="pill">JWT decodificato</span>
+            <div className="panel-actions">
+              <button className="ghost-btn" onClick={() => copyText(rawToken)}>Copia token</button>
+              <button className="ghost-btn" onClick={() => copyText(rawToken.split(".")[0] || "")}>Copia header</button>
+              <button className="ghost-btn" onClick={() => copyText(rawToken.split(".")[1] || "")}>Copia payload</button>
+            </div>
+          </div>
+          <div className="raw-jwt-full">
+            {tokenError ? (
+              <Highlight>
+                <span className="raw-token-text">{tokenError}</span>
+              </Highlight>
+            ) : (
+              <Highlight>
+                <span className="raw-token-text">
+                  {JSON.stringify({ header: tokenHeader, payload: tokenPayload }, null, 2)}
+                </span>
+              </Highlight>
+            )}
+          </div>
+          <p className="raw-label">Raw JWT (troncato)</p>
+          <div className="raw-truncated">
+            <span className="raw-token-text">
+              {rawToken ? truncateToken(rawToken) : "Premi \"Ping API\" per ottenere un token reale."}
+            </span>
+          </div>
+          <div className="jwt-chunks">
+            <div className="chunk header-chunk" title="Header (JOSE)">
+              {rawToken ? truncateChunk(rawToken.split(".")[0]) : "header"}
+            </div>
+            <span className="dot-sep">.</span>
+            <div className="chunk payload-chunk" title="Payload (claims)">
+              {rawToken ? truncateChunk(rawToken.split(".")[1]) : "payload"}
+            </div>
+            <span className="dot-sep">.</span>
+            <div className="chunk signature-chunk" title="Signature">
+              {rawToken ? truncateChunk(rawToken.split(".")[2]) : "signature"}
+            </div>
+          </div>
+          <p className="raw-hint">
+            Header e Payload sono firmati; la Signature garantisce integrita e provenienza. L'API valida col JWKS di Auth0.
+          </p>
+        </div>
+
+        <div className="token-badges">
+          <span className="chip">Rotazione chiavi</span>
+          <span className="chip">RBAC &amp; scope</span>
+          <span className="chip">Telemetry pronta</span>
+        </div>
+      </div>
+
+      <div className="token-visual">
+        {tokenError ? (
+          <Highlight>
+            <span>{tokenError}</span>
+          </Highlight>
+        ) : (
+          <>
+            <div className="token-ticket">
+              <div className="ticket-header">
+                <span className="pill">Auth0 Access Token</span>
+                <span className="pill ghost">exp {formatUnixTime(tokenPayload?.exp)}</span>
+                <span className="pill ghost">aud {tokenPayload?.aud || audience || "n/d"}</span>
+              </div>
+              <p className="ticket-copy">
+                Questo access token e stato emesso per l'API corrente ed e pronto per i check di autorizzazione.
+              </p>
+              <div className="ticket-raw">
+                <span className="ticket-raw-label">Raw (troncato)</span>
+                <span className="ticket-raw-value">{rawToken ? truncateToken(rawToken) : "n/d"}</span>
+              </div>
+            </div>
+
+            <div className="token-section">
+              <div className="section-header">
+                <span className="section-title">Header</span>
+                <span className="section-hint">Firma + algoritmo + key id</span>
+              </div>
+              {renderTokenGrid(tokenHeader, "header")}
+            </div>
+
+            <div className="token-section">
+              <div className="section-header">
+                <span className="section-title">Payload</span>
+                <span className="section-hint">Identita, permessi e policy temporale</span>
+              </div>
+              {renderTokenGrid(tokenPayload, "payload")}
+            </div>
+
+            {selectedClaim && (
+              <div className="claim-detail" role="dialog" aria-label="Dettaglio claim">
+                <div className="claim-header">
+                  <div>
+                    <p className="claim-kicker">{selectedClaim.label.toUpperCase()}</p>
+                    <h4>{selectedClaim.title}</h4>
+                  </div>
+                  <button className="close-btn" onClick={() => setSelectedClaim(null)} aria-label="Chiudi dettaglio claim">
+                    ×
+                  </button>
+                </div>
+                <p className="claim-description">{selectedClaim.description}</p>
+                <div className="claim-value-block">
+                  <p className="claim-value-label">Valore</p>
+                  <pre className="claim-value">{formatValue(selectedClaim.value)}</pre>
+                </div>
+                <div className="claim-actions">
+                  <span className="chip">Click su un altro campo per aggiornare</span>
+                  <span
+                    className="chip ghost"
+                    onClick={() => navigator.clipboard?.writeText(String(selectedClaim.value))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        navigator.clipboard?.writeText(String(selectedClaim.value));
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                  >
+                    Copia valore
+                  </span>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </section>
   );
 
   const handleConsent = async () => {
@@ -366,134 +536,7 @@ export const ExternalApiComponent = () => {
           </div>
         )}
 
-        {state.showResult && (
-          <section className="token-explainer" data-testid="jwt-result">
-            <div className="token-explainer-copy">
-              <p className="tagline">Token Experience</p>
-              <h3>Il tuo token, spiegato come una storia di fiducia.</h3>
-              <p>
-                Ogni claim del JWT è una promessa firmata da Auth0: identità certa, permessi mirati,
-                scadenze brevi e chiavi ruotate. Passa con il mouse per scoprire come ciascun campo
-                protegge il tuo prodotto e riduce attriti di onboarding.
-              </p>
-              <ul className="selling-points">
-                <li><strong>Vendita pronto-uso:</strong> mostra ai clienti come il token sigilla dati e permessi.</li>
-                <li><strong>Zero trust:</strong> audience dedicate + scadenze corte per bloccare riuso eccessivo.</li>
-                <li><strong>Dev friendly:</strong> format JSON leggibile, facile da provare e loggare.</li>
-              </ul>
-              <div className="token-badges">
-                <span className="chip">Rotazione chiavi</span>
-                <span className="chip">RBAC &amp; scope</span>
-                <span className="chip">Telemetry pronta</span>
-              </div>
-
-              <div className="raw-jwt-panel">
-                <div className="panel-head">
-                  <span className="pill">JWT completo</span>
-                  <div className="panel-actions">
-                    <button className="ghost-btn" onClick={() => copyText(rawToken)}>Copia token</button>
-                    <button className="ghost-btn" onClick={() => copyText(rawToken.split(".")[0] || "")}>Copia header</button>
-                    <button className="ghost-btn" onClick={() => copyText(rawToken.split(".")[1] || "")}>Copia payload</button>
-                  </div>
-                </div>
-                <div className="jwt-chunks">
-                  <div className="chunk header-chunk" title="Header (JOSE)">
-                    {rawToken ? rawToken.split(".")[0] : "header"}
-                  </div>
-                  <span className="dot-sep">.</span>
-                  <div className="chunk payload-chunk" title="Payload (claims)">
-                    {rawToken ? rawToken.split(".")[1] : "payload"}
-                  </div>
-                  <span className="dot-sep">.</span>
-                  <div className="chunk signature-chunk" title="Signature">
-                    {rawToken ? rawToken.split(".")[2] : "signature"}
-                  </div>
-                </div>
-                <p className="raw-hint">
-                  Header e Payload sono firmati; la Signature garantisce integrità e provenienza. L’API valida col JWKS di Auth0.
-                </p>
-              </div>
-            </div>
-
-            <div className="token-visual">
-              <div className="token-ticket">
-                <div className="ticket-header">
-                  <span className="pill">Auth0 Access Token</span>
-                  <span className="pill ghost">exp {formatUnixTime(tokenPayload?.exp)}</span>
-                  <span className="pill ghost">aud {tokenPayload?.aud || audience || "n/d"}</span>
-                </div>
-                <div className="ticket-body">
-                  <p className="ticket-label">Raw JWT (completo)</p>
-                  <Highlight>
-                    <span className="raw-token-text">
-                      {rawToken || "Premi \"Ping API\" per ottenere un token reale."}
-                    </span>
-                  </Highlight>
-                </div>
-              </div>
-
-              {tokenError ? (
-                <Highlight>
-                  <span>{tokenError}</span>
-                </Highlight>
-              ) : (
-                <>
-                  <div className="token-section">
-                    <div className="section-header">
-                      <span className="section-title">Header</span>
-                      <span className="section-hint">Firma + algoritmo + key id</span>
-                    </div>
-                    {renderTokenGrid(tokenHeader, "header")}
-                  </div>
-
-                  <div className="token-section">
-                    <div className="section-header">
-                      <span className="section-title">Payload</span>
-                      <span className="section-hint">Identità, permessi e policy temporale</span>
-                    </div>
-                    {renderTokenGrid(tokenPayload, "payload")}
-                  </div>
-
-                  {selectedClaim && (
-                    <div className="claim-detail" role="dialog" aria-label="Dettaglio claim">
-                      <div className="claim-header">
-                        <div>
-                          <p className="claim-kicker">{selectedClaim.label.toUpperCase()}</p>
-                          <h4>{selectedClaim.title}</h4>
-                        </div>
-                        <button className="close-btn" onClick={() => setSelectedClaim(null)} aria-label="Chiudi dettaglio claim">
-                          ×
-                        </button>
-                      </div>
-                      <p className="claim-description">{selectedClaim.description}</p>
-                      <div className="claim-value-block">
-                        <p className="claim-value-label">Valore</p>
-                        <pre className="claim-value">{formatValue(selectedClaim.value)}</pre>
-                      </div>
-                      <div className="claim-actions">
-                        <span className="chip">Click su un altro campo per aggiornare</span>
-                        <span
-                          className="chip ghost"
-                          onClick={() => navigator.clipboard?.writeText(String(selectedClaim.value))}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              navigator.clipboard?.writeText(String(selectedClaim.value));
-                            }
-                          }}
-                          role="button"
-                          tabIndex={0}
-                        >
-                          Copia valore
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </section>
-        )}
+        {state.showResult && <JwtExperience />}
       </div>
     </div>
   );
