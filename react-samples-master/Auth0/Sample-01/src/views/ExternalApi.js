@@ -19,6 +19,7 @@ export const ExternalApiComponent = () => {
   const [tokenHeader, setTokenHeader] = useState(null);
   const [rawToken, setRawToken] = useState("");
   const [tokenError, setTokenError] = useState("");
+  const [selectedClaim, setSelectedClaim] = useState(null);
 
   const { getAccessTokenSilently, loginWithPopup, getAccessTokenWithPopup } =
     useAuth0();
@@ -90,7 +91,33 @@ export const ExternalApiComponent = () => {
             description: "Custom claim injected by your API, Rule, or Action.",
           };
         return (
-          <div className="token-field" key={`${label}-${key}`}>
+          <div
+            className="token-field"
+            key={`${label}-${key}`}
+            role="button"
+            tabIndex={0}
+            onClick={() =>
+              setSelectedClaim({
+                key,
+                label,
+                title: meta.title,
+                description: meta.description,
+                value,
+              })
+            }
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setSelectedClaim({
+                  key,
+                  label,
+                  title: meta.title,
+                  description: meta.description,
+                  value,
+                });
+              }
+            }}
+          >
             <div className="field-key">{meta.title}</div>
             <div className="field-value">{formatValue(value)}</div>
             <div className="field-tooltip">
@@ -170,10 +197,12 @@ export const ExternalApiComponent = () => {
         setTokenHeader(decoded.header);
         setTokenPayload(decoded.payload);
         setTokenError("");
+        setSelectedClaim(null);
       } catch (err) {
         setTokenHeader(null);
         setTokenPayload(null);
         setTokenError(err?.message || "Unable to decode token.");
+        setSelectedClaim(null);
       }
 
       const response = await fetch(`${apiBase}/api/external`, {
@@ -350,12 +379,10 @@ export const ExternalApiComponent = () => {
                   <span className="pill ghost">aud {tokenPayload?.aud || audience || "n/d"}</span>
                 </div>
                 <div className="ticket-body">
-                  <p className="ticket-label">Raw JWT (troncato per sicurezza)</p>
+                  <p className="ticket-label">Raw JWT (completo)</p>
                   <Highlight>
                     <span className="raw-token-text">
-                      {rawToken
-                        ? `${rawToken.slice(0, 38)} ... ${rawToken.slice(-18)}`
-                        : "Premi \"Ping API\" per ottenere un token reale."}
+                      {rawToken || "Premi \"Ping API\" per ottenere un token reale."}
                     </span>
                   </Highlight>
                 </div>
@@ -382,6 +409,42 @@ export const ExternalApiComponent = () => {
                     </div>
                     {renderTokenGrid(tokenPayload, "payload")}
                   </div>
+
+                  {selectedClaim && (
+                    <div className="claim-detail" role="dialog" aria-label="Dettaglio claim">
+                      <div className="claim-header">
+                        <div>
+                          <p className="claim-kicker">{selectedClaim.label.toUpperCase()}</p>
+                          <h4>{selectedClaim.title}</h4>
+                        </div>
+                        <button className="close-btn" onClick={() => setSelectedClaim(null)} aria-label="Chiudi dettaglio claim">
+                          ×
+                        </button>
+                      </div>
+                      <p className="claim-description">{selectedClaim.description}</p>
+                      <div className="claim-value-block">
+                        <p className="claim-value-label">Valore</p>
+                        <pre className="claim-value">{formatValue(selectedClaim.value)}</pre>
+                      </div>
+                      <div className="claim-actions">
+                        <span className="chip">Click su un altro campo per aggiornare</span>
+                        <span
+                          className="chip ghost"
+                          onClick={() => navigator.clipboard?.writeText(String(selectedClaim.value))}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              navigator.clipboard?.writeText(String(selectedClaim.value));
+                            }
+                          }}
+                          role="button"
+                          tabIndex={0}
+                        >
+                          Copia valore
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </div>
