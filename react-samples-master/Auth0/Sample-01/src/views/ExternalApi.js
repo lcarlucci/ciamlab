@@ -24,50 +24,67 @@ export const ExternalApiComponent = () => {
   const { getAccessTokenSilently, loginWithPopup, getAccessTokenWithPopup } =
     useAuth0();
 
+  const copyText = (text) => {
+    if (!text) return;
+    navigator.clipboard?.writeText(text);
+  };
+
   const tokenFieldLibrary = {
     iss: {
       title: "Issuer (iss)",
-      description: "Auth0 tenant that signs the token and vouches for the user.",
+      description: "Tenant o server che ha emesso il token; l’API verifica che combaci col dominio Auth0 previsto.",
     },
     sub: {
       title: "Subject (sub)",
-      description: "The unique user identifier. It never changes and is safe for mapping.",
+      description: "Identificativo univoco dell’utente presso l’issuer; usalo come chiave stabile per i profili.",
     },
     aud: {
       title: "Audience (aud)",
-      description: "The API this token is meant for. Protects against token replay elsewhere.",
+      description: "Destinatari previsti (API). Se l’API non è nell’audience deve rifiutare il token.",
     },
     exp: {
       title: "Expires (exp)",
-      description: "UNIX time when the token stops being valid. Short-lived keeps risk low.",
+      description: "Epoch second di scadenza: oltre questa data il token non è più valido.",
     },
     iat: {
       title: "Issued At (iat)",
-      description: "Moment Auth0 minted the token. Helps trace sessions and support tickets.",
+      description: "Timestamp di emissione. Utile per audit e correlazione con i log di login.",
+    },
+    nbf: {
+      title: "Not Before (nbf)",
+      description: "Il token diventa valido solo da questo istante; blocca utilizzi anticipati.",
     },
     scope: {
       title: "Scope",
-      description: "Fine-grained permissions the calling app requested (e.g., read:orders).",
+      description: "Permessi granulari richiesti dal client (es. read:orders). L’API deve verificarli.",
     },
     permissions: {
       title: "Permissions",
-      description: "API-level grants enforced by Auth0 RBAC. Use to drive authorization checks.",
+      description: "Permessi RBAC calcolati per questa audience; consigliati per gli authorization check.",
     },
     azp: {
       title: "Authorized Party (azp)",
-      description: "The client that asked for the token. Guards multi-app ecosystems.",
+      description: "Client che ha ottenuto il token (caller). Utile in ecosistemi multi-app.",
     },
     kid: {
       title: "Key Id (kid)",
-      description: "Tells the API which Auth0 signing key to trust when validating the signature.",
+      description: "Identificatore della chiave di firma. L’API scarica il JWKS Auth0 e usa il kid per validare.",
     },
     alg: {
       title: "Algorithm (alg)",
-      description: "Cryptographic algorithm securing the JWT. Defaults to RS256 for Auth0 APIs.",
+      description: "Algoritmo di firma (es. RS256). L’API deve accettare solo quelli consentiti.",
     },
     typ: {
       title: "Type (typ)",
-      description: "Declares this is a JWT. Makes intent explicit for downstream services.",
+      description: "Tipo di token (tipicamente JWT).",
+    },
+    jti: {
+      title: "JWT ID (jti)",
+      description: "Identificatore univoco di questa istanza; aiuta a prevenire replay (deny/allow list).",
+    },
+    auth_time: {
+      title: "Auth Time",
+      description: "Momento dell’ultima autenticazione interattiva; utile per MFA/step-up.",
     },
   };
 
@@ -368,6 +385,33 @@ export const ExternalApiComponent = () => {
                 <span className="chip">Rotazione chiavi</span>
                 <span className="chip">RBAC &amp; scope</span>
                 <span className="chip">Telemetry pronta</span>
+              </div>
+
+              <div className="raw-jwt-panel">
+                <div className="panel-head">
+                  <span className="pill">JWT completo</span>
+                  <div className="panel-actions">
+                    <button className="ghost-btn" onClick={() => copyText(rawToken)}>Copia token</button>
+                    <button className="ghost-btn" onClick={() => copyText(rawToken.split(".")[0] || "")}>Copia header</button>
+                    <button className="ghost-btn" onClick={() => copyText(rawToken.split(".")[1] || "")}>Copia payload</button>
+                  </div>
+                </div>
+                <div className="jwt-chunks">
+                  <div className="chunk header-chunk" title="Header (JOSE)">
+                    {rawToken ? rawToken.split(".")[0] : "header"}
+                  </div>
+                  <span className="dot-sep">.</span>
+                  <div className="chunk payload-chunk" title="Payload (claims)">
+                    {rawToken ? rawToken.split(".")[1] : "payload"}
+                  </div>
+                  <span className="dot-sep">.</span>
+                  <div className="chunk signature-chunk" title="Signature">
+                    {rawToken ? rawToken.split(".")[2] : "signature"}
+                  </div>
+                </div>
+                <p className="raw-hint">
+                  Header e Payload sono firmati; la Signature garantisce integrità e provenienza. L’API valida col JWKS di Auth0.
+                </p>
               </div>
             </div>
 
