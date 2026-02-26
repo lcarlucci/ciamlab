@@ -280,8 +280,8 @@
 }
 
 .raw-jwt-full {
-  max-height: 140px;
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
   border-radius: 10px;
   border: 1px solid rgba(15, 29, 18, 0.12);
   margin-bottom: 10px;
