@@ -8,6 +8,7 @@ import Home from "./views/Home";
 import Profile from "./views/Profile";
 import MainPageAfterLogin from "./components/MainPageAfterLogin";
 import ExternalApi from "./views/ExternalApi";
+import ApiTest from "./views/ApiTest";
 import Checkout from "./views/Checkout";
 import Admin from "./views/Admin";
 import { useAuth0 } from "@auth0/auth0-react";
@@ -50,6 +51,14 @@ const App = () => {
             element={
               <ProtectedRoute>
                 <ExternalApi />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/api-test"
+            element={
+              <ProtectedRoute>
+                <ApiTest />
               </ProtectedRoute>
             }
           />
