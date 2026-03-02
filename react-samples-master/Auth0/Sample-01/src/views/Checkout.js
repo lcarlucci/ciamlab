@@ -38,19 +38,6 @@ const Checkout = () => {
     }
   });
 
-  // Derived totals
-  const pricePerItem = PRICE_PER_ITEM;
-  const subtotal = effectiveCart.length * pricePerItem;
-  const discount = hasPartnerDiscount ? PARTNER_DISCOUNT : 0;
-  const total = Math.max(subtotal - discount, 0);
-  const formatter = new Intl.NumberFormat("it-IT", {
-    style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: 0,
-  });
-
-  const showEnterpriseFields = paymentMethod === "invoice";
-
   // Form state
   const [billing, setBilling] = useState({
     fullName: user?.name || "",
@@ -86,6 +73,19 @@ const Checkout = () => {
   const [mfaChecked, setMfaChecked] = useState(false);
   const [mfaVerified, setMfaVerified] = useState(false);
   const [hasPartnerDiscount, setHasPartnerDiscount] = useState(false);
+
+  // Derived totals
+  const pricePerItem = PRICE_PER_ITEM;
+  const subtotal = effectiveCart.length * pricePerItem;
+  const discount = hasPartnerDiscount ? PARTNER_DISCOUNT : 0;
+  const total = Math.max(subtotal - discount, 0);
+  const formatter = new Intl.NumberFormat("it-IT", {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: 0,
+  });
+
+  const showEnterpriseFields = paymentMethod === "invoice";
 
   // Helpers
   const normalizePhone = (value) => {

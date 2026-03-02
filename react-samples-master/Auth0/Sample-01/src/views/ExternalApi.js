@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Button, Alert } from "reactstrap";
 import Highlight from "../components/Highlight";
 import { useAuth0, withAuthenticationRequired } from "@auth0/auth0-react";
@@ -147,24 +147,24 @@ export const ExternalApiComponent = () => {
     return date.toLocaleString("it-IT", { hour12: false });
   };
 
-  const showTooltip = (meta, event) => {
+  const hideTooltip = () => {
+    setJwtTooltip((prev) => ({ ...prev, visible: false }));
+  };
+
+  const updateTooltipFromEvent = (event) => {
+    const el = document.elementFromPoint(event.clientX, event.clientY);
+    const keyEl = el && el.closest ? el.closest(".jwt-key") : null;
+    if (!keyEl) {
+      hideTooltip();
+      return;
+    }
     setJwtTooltip({
       visible: true,
-      title: meta.title,
-      description: meta.description,
+      title: keyEl.getAttribute("data-title") || "",
+      description: keyEl.getAttribute("data-desc") || "",
       x: event.clientX,
       y: event.clientY,
     });
-  };
-
-  const moveTooltip = (event) => {
-    setJwtTooltip((prev) =>
-      prev.visible ? { ...prev, x: event.clientX, y: event.clientY } : prev
-    );
-  };
-
-  const hideTooltip = () => {
-    setJwtTooltip((prev) => ({ ...prev, visible: false }));
   };
 
   const renderKey = (key, path) => {
@@ -172,10 +172,8 @@ export const ExternalApiComponent = () => {
     return (
       <span
         className={`jwt-key ${path.length === 0 ? "root" : ""}`}
-        data-jwt-key="true"
-        onMouseEnter={(event) => showTooltip(meta, event)}
-        onMouseMove={moveTooltip}
-        onMouseLeave={hideTooltip}
+        data-title={meta.title}
+        data-desc={meta.description}
       >
         "{key}"
       </span>
@@ -309,6 +307,12 @@ export const ExternalApiComponent = () => {
     return lines;
   }
 
+  useEffect(() => {
+    const handleScroll = () => hideTooltip();
+    window.addEventListener("scroll", handleScroll, true);
+    return () => window.removeEventListener("scroll", handleScroll, true);
+  }, []);
+
   const JwtExperience = () => {
     const decoded = tokenError ? null : { header: tokenHeader, payload: tokenPayload };
     return (
@@ -338,11 +342,7 @@ export const ExternalApiComponent = () => {
               className="jwt-json"
               role="region"
               aria-label="Decoded JWT"
-              onMouseMove={(event) => {
-                if (!event.target.closest(".jwt-key")) {
-                  hideTooltip();
-                }
-              }}
+              onMouseMove={updateTooltipFromEvent}
               onMouseLeave={hideTooltip}
             >
               <div className="jwt-line">
