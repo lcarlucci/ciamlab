@@ -13,6 +13,7 @@ const Checkout = () => {
   // Constants
   const PAYMENT_METHODS = ["card", "paypal", "gpay", "applepay", "invoice"];
   const PRICE_PER_ITEM = 12000;
+  const PARTNER_DISCOUNT = 5000;
   const PHONE_COUNTRY_PREFIX = "+39";
   const PHONE_E164_REGEX = /^\+\d{6,}$/;
   const MFA_ACR = "http://schemas.openid.net/pape/policies/2007/06/multi-factor";
@@ -40,6 +41,8 @@ const Checkout = () => {
   // Derived totals
   const pricePerItem = PRICE_PER_ITEM;
   const subtotal = effectiveCart.length * pricePerItem;
+  const discount = hasPartnerDiscount ? PARTNER_DISCOUNT : 0;
+  const total = Math.max(subtotal - discount, 0);
   const formatter = new Intl.NumberFormat("it-IT", {
     style: "currency",
     currency: "EUR",
@@ -82,6 +85,7 @@ const Checkout = () => {
   const [mfaRequired, setMfaRequired] = useState(false);
   const [mfaChecked, setMfaChecked] = useState(false);
   const [mfaVerified, setMfaVerified] = useState(false);
+  const [hasPartnerDiscount, setHasPartnerDiscount] = useState(false);
 
   // Helpers
   const normalizePhone = (value) => {
@@ -182,6 +186,8 @@ const Checkout = () => {
         items: effectiveCart,
         totals: {
           subtotal,
+          discount,
+          total,
           pricePerItem,
           currency: "EUR",
         },
@@ -284,13 +290,18 @@ const Checkout = () => {
         const requiresMfa = roles.some(
           (role) => String(role || "").trim().toLowerCase() === "ciam demo mfa"
         );
+        const partnerDiscount = roles.some(
+          (role) => String(role || "").trim().toLowerCase() === "sconto_partner"
+        );
         if (isMounted) {
           setMfaRequired(requiresMfa);
+          setHasPartnerDiscount(partnerDiscount);
           setMfaChecked(true);
         }
       } catch {
         if (isMounted) {
           setMfaRequired(false);
+          setHasPartnerDiscount(false);
           setMfaChecked(true);
         }
       }
@@ -704,6 +715,16 @@ const Checkout = () => {
             <span>Subtotal</span>
             <span>{formatter.format(subtotal)}</span>
           </div>
+          {discount > 0 ? (
+            <div className="summary-total discount">
+              <span>Partner discount</span>
+              <span>-{formatter.format(discount)}</span>
+            </div>
+          ) : null}
+          <div className="summary-total total">
+            <span>Total</span>
+            <span>{formatter.format(total)}</span>
+          </div>
           <div className="summary-total muted">
             <span>Tax & fees</span>
             <span>Calculated at invoicing</span>
@@ -748,7 +769,7 @@ const Checkout = () => {
               </div>
               <div>
                 <span className="dialog-label">Total</span>
-                <span className="dialog-value">{formatter.format(subtotal)}</span>
+                <span className="dialog-value">{formatter.format(total)}</span>
               </div>
               <div>
                 <span className="dialog-label">Items</span>
