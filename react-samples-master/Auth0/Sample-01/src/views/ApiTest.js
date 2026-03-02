@@ -26,38 +26,38 @@ const ApiTestComponent = () => {
     () => [
       {
         id: "intro",
-        eyebrow: "Step 01",
-        title: "Decoded overview",
+        eyebrow: "Capitolo 01",
+        title: "La nascita del token",
         body:
-          "This is the decoded JWT. It is a readable snapshot of identity and access facts. Scroll to focus on each part.",
+          "Questo e il tuo JWT decodificato: una storia completa di identita, ruoli, permessi e scadenze. Scorri per mettere a fuoco ogni capitolo.",
       },
       {
         id: "header",
-        eyebrow: "Step 02",
-        title: "Header: how the token is signed",
+        eyebrow: "Capitolo 02",
+        title: "Header: la chiave della fiducia",
         body:
-          "The header tells your API which algorithm and key were used to sign the token. It is the trust anchor.",
+          "Algoritmo, tipo e key id. Qui la tua API capisce come verificare la firma e quali chiavi usare.",
       },
       {
         id: "payload",
-        eyebrow: "Step 03",
-        title: "Payload: who and what is allowed",
+        eyebrow: "Capitolo 03",
+        title: "Payload: identita e potere d'azione",
         body:
-          "Claims live here: identity, audience, scopes, roles and expirations. This is what your API authorizes.",
+          "Il cuore del token: audience, subject, ruoli, scope e tempi. E la sezione che decide cosa puoi fare.",
       },
       {
         id: "signature",
-        eyebrow: "Step 04",
-        title: "Signature: proof of integrity",
+        eyebrow: "Capitolo 04",
+        title: "Signature: prova di integrita",
         body:
-          "The signature prevents tampering. Your API validates it with Auth0 JWKS before trusting any claim.",
+          "La firma sigilla tutto. Se qualcuno altera il token, la tua API lo vede subito e blocca l'accesso.",
       },
       {
         id: "use",
-        eyebrow: "Step 05",
-        title: "Operational view",
+        eyebrow: "Capitolo 05",
+        title: "Dal racconto all'azione",
         body:
-          "Use this to explain to stakeholders why a JWT is safe, fast, and portable across services.",
+          "In produzione la verifica e locale e veloce: firma, audience e scadenze. Poi autorizzazioni basate su ruoli e permessi.",
       },
     ],
     []
@@ -66,75 +66,93 @@ const ApiTestComponent = () => {
   const tokenFieldLibrary = {
     iss: {
       title: "Issuer (iss)",
-      description: "Authority that issued the token. Must match the Auth0 domain expected by your API.",
+      description:
+        "Emittente del token. Deve combaciare con il dominio Auth0 atteso dalla tua API, altrimenti il token non e valido.",
     },
     sub: {
       title: "Subject (sub)",
-      description: "Unique user id from the issuer. Stable key for profiles and permissions mapping.",
+      description:
+        "Identificativo univoco dell'utente rilasciato dall'emittente. E la chiave stabile per profili e mapping permessi.",
     },
     aud: {
       title: "Audience (aud)",
-      description: "Target API list. If your API is not here, the token is not valid for it.",
+      description:
+        "API di destinazione. Se la tua API non compare qui, il token non puo essere usato per accedervi.",
     },
     exp: {
       title: "Expires (exp)",
-      description: "Epoch expiry time. After this moment the token must be rejected.",
+      description:
+        "Scadenza in epoch. Dopo questo momento il token deve essere rifiutato senza eccezioni.",
     },
     iat: {
       title: "Issued At (iat)",
-      description: "Epoch issued time. Useful for audit and token age checks.",
+      description:
+        "Momento di emissione in epoch. Utile per audit e per stimare l'eta del token.",
     },
     nbf: {
       title: "Not Before (nbf)",
-      description: "Epoch time before which the token must not be accepted.",
+      description:
+        "Non valido prima di questo momento (epoch). Protegge da usi anticipati del token.",
     },
     scope: {
       title: "Scope",
-      description: "Client requested permissions (e.g. read:orders). Your API should enforce them.",
+      description:
+        "Permessi richiesti dal client (es. read:orders). La tua API deve applicarli per ogni endpoint.",
     },
     permissions: {
       title: "Permissions",
-      description: "RBAC permissions calculated by Auth0 for this audience.",
+      description:
+        "Permessi RBAC calcolati da Auth0 per questa audience. Sono la base per autorizzare le azioni.",
     },
     azp: {
       title: "Authorized Party (azp)",
-      description: "Client application that requested the token.",
+      description:
+        "Applicazione client che ha richiesto il token. Ti aiuta a capire da quale app arriva la richiesta.",
     },
     kid: {
       title: "Key Id (kid)",
-      description: "Signing key id used to verify the signature against Auth0 JWKS.",
+      description:
+        "Identificativo della chiave di firma. La tua API lo usa per selezionare la chiave corretta nel JWKS Auth0.",
     },
     alg: {
       title: "Algorithm (alg)",
-      description: "Signature algorithm (e.g. RS256). Accept only allowed algorithms.",
+      description:
+        "Algoritmo di firma (es. RS256). Accetta solo quelli consentiti dalla tua policy di sicurezza.",
     },
     typ: {
       title: "Type (typ)",
-      description: "Token type (often JWT or at+jwt).",
+      description:
+        "Tipo di token (spesso JWT o at+jwt). Serve per distinguere access token da altri formati.",
     },
     jti: {
       title: "JWT ID (jti)",
-      description: "Unique token id. Useful for replay prevention or tracking.",
+      description:
+        "Identificativo univoco del token. Utile per prevenire replay o per tracciare eventi critici.",
     },
     auth_time: {
       title: "Auth Time",
-      description: "When the user last authenticated interactively. Useful for step-up policies.",
+      description:
+        "Ultima autenticazione interattiva dell'utente. Fondamentale per policy di step-up.",
     },
     client_id: {
       title: "Client ID",
-      description: "Identifier of the client app that requested the token.",
+      description:
+        "Identificativo dell'app client che ha richiesto il token. Aiuta nel controllo di fiducia tra app e API.",
     },
     "CIAM DEMO/roles": {
       title: "CIAM DEMO roles",
-      description: "Roles assigned to the user in the CIAM DEMO context.",
+      description:
+        "Ruoli assegnati all'utente nel contesto CIAM DEMO. Determinano cosa puo fare nell'applicazione.",
     },
     "https://auth.rocks/email": {
       title: "Auth.rocks email",
-      description: "User email stored in the auth.rocks custom namespace.",
+      description:
+        "Email dell'utente nel namespace custom auth.rocks. Utile per contatto e identificazione.",
     },
     "https://auth.rocks/name": {
       title: "Auth.rocks name",
-      description: "User name stored in the auth.rocks custom namespace.",
+      description:
+        "Nome completo dell'utente nel namespace custom auth.rocks. Migliora UX e riconoscibilita.",
     },
   };
 
@@ -151,7 +169,7 @@ const ApiTestComponent = () => {
   const decodeJwt = (jwt) => {
     const parts = jwt.split(".");
     if (parts.length !== 3) {
-      throw new Error("Token is not a valid JWT.");
+      throw new Error("Token non valido.");
     }
 
     const decodePart = (part) => {
@@ -193,7 +211,7 @@ const ApiTestComponent = () => {
       setTokenHeader(null);
       setTokenPayload(null);
       setTokenSignature("");
-      setTokenError(error?.message || "Unable to fetch token.");
+      setTokenError(error?.message || "Impossibile ottenere il token.");
     }
   };
 
@@ -201,20 +219,20 @@ const ApiTestComponent = () => {
     if (path.length === 0 && key === "header") {
       return {
         title: "Header",
-        description: "Technical header used to validate signature and algorithm.",
+        description: "Contiene algoritmo, tipo e chiave. Serve alla tua API per verificare la firma.",
       };
     }
     if (path.length === 0 && key === "payload") {
       return {
         title: "Payload",
-        description: "Claims that describe identity, permissions and constraints.",
+        description: "Raccoglie i claim: identita, audience, ruoli, scope e scadenze.",
       };
     }
     const meta = tokenFieldLibrary[key];
     if (meta) return meta;
     return {
       title: key,
-      description: "Custom claim added by API, Rule or Action. Document and validate it on the API.",
+      description: "Claim custom aggiunto da API, Rule o Action. Va documentato e validato lato API.",
     };
   };
 
@@ -385,23 +403,49 @@ const ApiTestComponent = () => {
   }, []);
 
   useEffect(() => {
-    const elements = Array.from(document.querySelectorAll(".story-step"));
-    if (!elements.length) return undefined;
+    const stepsEls = Array.from(document.querySelectorAll(".story-step"));
+    if (!stepsEls.length) return undefined;
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries.filter((entry) => entry.isIntersecting);
-        if (!visible.length) return;
-        visible.sort((a, b) => b.intersectionRatio - a.intersectionRatio);
-        const best = visible[0];
-        const stepId = best.target.getAttribute("data-step");
-        if (stepId) setActiveStep(stepId);
-      },
-      { threshold: [0.2, 0.4, 0.6, 0.8] }
-    );
+    let positions = [];
+    const computePositions = () => {
+      positions = stepsEls.map((el) => ({
+        id: el.getAttribute("data-step"),
+        top: el.getBoundingClientRect().top + window.scrollY,
+      }));
+    };
 
-    elements.forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
+    let ticking = false;
+    const updateActiveStep = () => {
+      const trigger = window.scrollY + window.innerHeight * 0.45;
+      let current = positions[0];
+      positions.forEach((pos) => {
+        if (pos.top <= trigger) {
+          current = pos;
+        }
+      });
+      if (current?.id) {
+        setActiveStep(current.id);
+      }
+      ticking = false;
+    };
+
+    const onScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(updateActiveStep);
+        ticking = true;
+      }
+    };
+
+    computePositions();
+    updateActiveStep();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", () => {
+      computePositions();
+      onScroll();
+    });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+    };
   }, []);
 
   const renderStageContent = () => {
@@ -411,14 +455,14 @@ const ApiTestComponent = () => {
     if (!tokenHeader || !tokenPayload) {
       return (
         <div className="token-empty">
-          <p>Press "Ping token" to decode a real JWT.</p>
+          <p>Premi il pulsante per iniziare e decodificare un JWT reale.</p>
         </div>
       );
     }
 
     if (activeStep === "header") {
       return (
-        <div className="token-code" onMouseMove={updateTooltipFromEvent} onMouseLeave={hideTooltip}>
+        <div className="token-code focus-header" onMouseMove={updateTooltipFromEvent} onMouseLeave={hideTooltip}>
           <div className="jwt-line">
             <span className="jwt-brace">{"{"}</span>
           </div>
@@ -432,7 +476,7 @@ const ApiTestComponent = () => {
 
     if (activeStep === "payload") {
       return (
-        <div className="token-code" onMouseMove={updateTooltipFromEvent} onMouseLeave={hideTooltip}>
+        <div className="token-code focus-payload" onMouseMove={updateTooltipFromEvent} onMouseLeave={hideTooltip}>
           <div className="jwt-line">
             <span className="jwt-brace">{"{"}</span>
           </div>
@@ -447,12 +491,10 @@ const ApiTestComponent = () => {
     if (activeStep === "signature") {
       return (
         <div className="signature-panel">
-          <h4>Signature segment</h4>
-          <p>
-            This is the signature part of the token. It is used by your API to verify integrity.
-          </p>
+          <h4>Signature</h4>
+          <p>La firma garantisce che il token non sia stato alterato.</p>
           <div className="signature-pill">
-            {tokenSignature || "Signature not available"}
+            {tokenSignature || "Signature non disponibile"}
           </div>
         </div>
       );
@@ -461,18 +503,18 @@ const ApiTestComponent = () => {
     if (activeStep === "use") {
       return (
         <div className="usage-panel">
-          <h4>What your API does with it</h4>
+          <h4>Come lo usa la tua API</h4>
           <ul>
-            <li>Validate signature with Auth0 JWKS</li>
-            <li>Check audience, expiry, and not-before</li>
-            <li>Authorize based on permissions and roles</li>
+            <li>Valida la firma con Auth0 JWKS</li>
+            <li>Controlla audience, scadenza e not-before</li>
+            <li>Autorizza con ruoli e permessi</li>
           </ul>
         </div>
       );
     }
 
     return (
-      <div className="token-code" onMouseMove={updateTooltipFromEvent} onMouseLeave={hideTooltip}>
+      <div className="token-code focus-all" onMouseMove={updateTooltipFromEvent} onMouseLeave={hideTooltip}>
         <div className="jwt-line">
           <span className="jwt-brace">{"{"}</span>
         </div>
@@ -484,18 +526,20 @@ const ApiTestComponent = () => {
     );
   };
 
+  const currentStep = steps.find((step) => step.id === activeStep) || steps[0];
+
   return (
     <div className="api-test-container">
       <header className="api-test-hero">
         <div className="hero-copy">
           <span className="hero-eyebrow">API Test Lab</span>
-          <h1>Scroll-driven JWT story</h1>
+          <h1>Il tuo JWT raccontato come una storia</h1>
           <p>
-            Ping a real token and let the page guide you through header, payload, and signature with a
-            cinematic scroll.
+            Un singolo token, cinque capitoli. Scopri come Auth0 rende ogni parte chiara,
+            verificabile e pronta per la produzione.
           </p>
           <button className="hero-btn" onClick={callApi} disabled={!audience}>
-            Ping token
+            Inizia la storia
           </button>
         </div>
         <div className="hero-glow" aria-hidden="true" />
@@ -505,8 +549,8 @@ const ApiTestComponent = () => {
         <div className="story-sticky">
           <div className={`token-stage step-${activeStep}`}>
             <div className="stage-header">
-              <span className="stage-label">{activeStep.toUpperCase()}</span>
-              <span className="stage-sub">Decoded JWT view</span>
+              <span className="stage-label">{currentStep.eyebrow}</span>
+              <span className="stage-sub">{currentStep.title}</span>
             </div>
             {renderStageContent()}
             {jwtTooltip.visible && (
@@ -523,7 +567,11 @@ const ApiTestComponent = () => {
         </div>
         <div className="story-steps">
           {steps.map((step) => (
-            <section className="story-step" key={step.id} data-step={step.id}>
+            <section
+              className={`story-step ${activeStep === step.id ? "active" : ""}`}
+              key={step.id}
+              data-step={step.id}
+            >
               <span className="step-eyebrow">{step.eyebrow}</span>
               <h2>{step.title}</h2>
               <p>{step.body}</p>
