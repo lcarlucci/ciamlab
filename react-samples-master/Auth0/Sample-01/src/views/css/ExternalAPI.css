@@ -116,6 +116,10 @@
   color: var(--ink-muted);
 }
 
+.muted {
+  color: var(--ink-muted);
+}
+
 .result-header {
   display: flex;
   align-items: center;
@@ -150,7 +154,7 @@
 
 .jwt-simple {
   margin-top: 24px;
-  background: var(--surface);
+  background: linear-gradient(160deg, #ffffff 0%, #f4f9ee 100%);
   border-radius: 18px;
   padding: 20px;
   border: 1px solid rgba(15, 29, 18, 0.12);
@@ -175,15 +179,30 @@
   position: relative;
 }
 
+.jwt-banner {
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(134, 188, 37, 0.12);
+  border: 1px solid rgba(134, 188, 37, 0.3);
+}
+
+.jwt-banner-text {
+  font-weight: 600;
+  color: #1f3b1f;
+  font-size: 0.95rem;
+}
+
 .jwt-json {
-  background: #101810;
-  color: #e6efe0;
+  background: #f9fcf6;
+  color: #1d2a1e;
   border-radius: 14px;
   padding: 16px;
   font-family: "SFMono-Regular", ui-monospace, Menlo, Consolas, "Liberation Mono", monospace;
   font-size: 0.95rem;
   line-height: 1.55;
-  border: 1px solid rgba(15, 29, 18, 0.3);
+  border: 1px solid rgba(15, 29, 18, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(134, 188, 37, 0.08);
 }
 
 .jwt-line {
@@ -196,29 +215,29 @@
 }
 
 .jwt-key {
-  color: #b2f38f;
+  color: #1c4a24;
   font-weight: 700;
   cursor: help;
 }
 
 .jwt-key.root {
-  color: #86bc25;
+  color: #2f6b1f;
 }
 
 .jwt-value {
-  color: #f4f6f0;
+  color: #1d2a1e;
 }
 
 .jwt-brace {
-  color: #86bc25;
+  color: #6a961d;
 }
 
 .jwt-colon {
-  color: #d3dfc8;
+  color: #3c4c40;
 }
 
 .jwt-comma {
-  color: #9ab58c;
+  color: #6b7a6f;
 }
 
 .jwt-error {

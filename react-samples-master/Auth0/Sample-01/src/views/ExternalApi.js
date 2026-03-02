@@ -137,6 +137,16 @@ export const ExternalApiComponent = () => {
     };
   };
 
+  const epochKeys = new Set(["exp", "iat", "nbf", "auth_time"]);
+
+  const formatEpoch = (epoch) => {
+    const numeric = Number(epoch);
+    if (!Number.isFinite(numeric)) return null;
+    const date = new Date(numeric * 1000);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toLocaleString("it-IT", { hour12: false });
+  };
+
   const showTooltip = (meta, event) => {
     setJwtTooltip({
       visible: true,
@@ -162,6 +172,7 @@ export const ExternalApiComponent = () => {
     return (
       <span
         className={`jwt-key ${path.length === 0 ? "root" : ""}`}
+        data-jwt-key="true"
         onMouseEnter={(event) => showTooltip(meta, event)}
         onMouseMove={moveTooltip}
         onMouseLeave={hideTooltip}
@@ -169,6 +180,16 @@ export const ExternalApiComponent = () => {
         "{key}"
       </span>
     );
+  };
+
+  const formatValueForKey = (key, value) => {
+    if (epochKeys.has(key)) {
+      const human = formatEpoch(value);
+      if (human) {
+        return `"${human} (epoch ${Number(value)})"`;
+      }
+    }
+    return formatPrimitive(value);
   };
 
   const formatPrimitive = (value) => {
@@ -280,7 +301,7 @@ export const ExternalApiComponent = () => {
           <span className="jwt-indent" style={{ width: indent * 16 }} />
           {renderKey(key, path)}
           <span className="jwt-colon">: </span>
-          <span className="jwt-value">{formatPrimitive(value)}</span>
+          <span className="jwt-value">{formatValueForKey(key, value)}</span>
           {comma}
         </div>
       );
@@ -295,19 +316,35 @@ export const ExternalApiComponent = () => {
         <div className="jwt-simple-header">
           <div>
             <span className="jwt-kicker">JWT decoded view</span>
-            <h3>Struttura del JWT, ricostruita e interattiva</h3>
+            <h3>Struttura del JWT spiegata in modo semplice</h3>
             <p>
-              Dopo il click, il token viene decodificato e ricostruito come JSON.
-              Passa il mouse sui campi per capire cosa significano, senza bisogno di competenze tecniche.
+              Dopo il click, il token viene decodificato e mostrato come JSON leggibile.
+              Passa il mouse sui campi per capire cosa significano, anche se non sei tecnico.
             </p>
           </div>
+        </div>
+
+        <div className="jwt-banner">
+          <span className="jwt-banner-text">
+            Cos'e un JWT? Un contenitore firmato di dati e permessi, verificabile dall'API.
+          </span>
         </div>
 
         <div className="jwt-viewer">
           {tokenError ? (
             <div className="jwt-error">{tokenError}</div>
           ) : (
-            <div className="jwt-json" role="region" aria-label="Decoded JWT">
+            <div
+              className="jwt-json"
+              role="region"
+              aria-label="Decoded JWT"
+              onMouseMove={(event) => {
+                if (!event.target.closest(".jwt-key")) {
+                  hideTooltip();
+                }
+              }}
+              onMouseLeave={hideTooltip}
+            >
               <div className="jwt-line">
                 <span className="jwt-indent" style={{ width: 0 }} />
                 <span className="jwt-brace">{"{"}</span>
@@ -534,18 +571,6 @@ export const ExternalApiComponent = () => {
       )}
 
       <div className="result-block-container">
-        {state.showResult && (
-          <div className="result-block" data-testid="api-result">
-            <div className="result-header">
-              <h6 className="muted">API Response</h6>
-              <span className="chip success">LIVE</span>
-            </div>
-            <Highlight>
-              <span>{JSON.stringify(state.apiMessage, null, 2)}</span>
-            </Highlight>
-          </div>
-        )}
-
         {state.showResult && <JwtExperience />}
       </div>
     </div>
