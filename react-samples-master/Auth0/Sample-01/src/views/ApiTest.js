@@ -458,7 +458,7 @@ const ApiTestComponent = () => {
     if (!tokenHeader || !tokenPayload) {
       return (
         <div className="token-empty">
-          <p>Premi il pulsante per iniziare e decodificare un JWT reale.</p>
+          <p>Il token viene caricato automaticamente. Se non lo vedi, verifica la configurazione di audience.</p>
         </div>
       );
     }
@@ -546,8 +546,9 @@ const ApiTestComponent = () => {
           <span className="hero-eyebrow">API Test Lab</span>
           <h1>Introduzione al JWT</h1>
           <p>
-            Un token, scomposto in cinque sezioni. Scopri come Auth0 rende ogni parte
-            chiara, verificabile e pronta per l'uso in produzione.
+            Un token reale, scomposto in cinque sezioni. Quando il token e disponibile,
+            viene decodificato e mostrato come JSON leggibile. Passa il mouse sui campi
+            per capire il significato di ogni claim, anche se non sei tecnico.
           </p>
           <button className="hero-btn" onClick={callApi} disabled={!audience}>
             Rigenera token

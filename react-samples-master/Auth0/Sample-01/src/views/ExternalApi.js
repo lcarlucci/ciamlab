@@ -328,8 +328,8 @@ export const ExternalApiComponent = () => {
             <span className="jwt-kicker">JWT decoded view</span>
             <h3>Struttura del JWT spiegata in modo semplice</h3>
             <p>
-              Dopo il click, il token viene decodificato e mostrato come JSON leggibile.
-              Passa il mouse sui campi per capire cosa significano, anche se non sei tecnico.
+              Quando il token e disponibile, viene decodificato e mostrato come JSON leggibile.
+              Passa il mouse sui campi per capire il significato di ogni claim, anche se non sei tecnico.
             </p>
           </div>
         </div>

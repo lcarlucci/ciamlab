@@ -29,6 +29,18 @@ const Checkout = () => {
     }
   });
   const effectiveCart = cart.length ? cart : storedCart;
+  const normalizedCart = effectiveCart.map((item) => {
+    if (item && typeof item === "object") {
+      return {
+        title: item.label || item.title || "Service",
+        price: Number(item.price) || PRICE_PER_ITEM,
+      };
+    }
+    return {
+      title: String(item),
+      price: PRICE_PER_ITEM,
+    };
+  });
   const [paymentMethod, setPaymentMethod] = useState(() => {
     try {
       const stored = localStorage.getItem("ciam_payment_method");
@@ -76,7 +88,7 @@ const Checkout = () => {
 
   // Derived totals
   const pricePerItem = PRICE_PER_ITEM;
-  const subtotal = effectiveCart.length * pricePerItem;
+  const subtotal = normalizedCart.reduce((sum, item) => sum + item.price, 0);
   const discount = hasPartnerDiscount ? PARTNER_DISCOUNT : 0;
   const total = Math.max(subtotal - discount, 0);
   const formatter = new Intl.NumberFormat("it-IT", {
@@ -183,7 +195,8 @@ const Checkout = () => {
       const order = {
         id: `ord_${Date.now()}`,
         createdAt: new Date().toISOString(),
-        items: effectiveCart,
+        items: normalizedCart.map((item) => item.title),
+        lineItems: normalizedCart,
         totals: {
           subtotal,
           discount,
@@ -699,14 +712,14 @@ const Checkout = () => {
 
         <aside className="checkout-summary">
           <h2>Order Summary</h2>
-          {effectiveCart.length === 0 ? (
+          {normalizedCart.length === 0 ? (
             <p className="empty-cart">Your cart is empty.</p>
           ) : (
             <ul className="summary-list">
-              {effectiveCart.map((item, idx) => (
+              {normalizedCart.map((item, idx) => (
                 <li key={idx}>
-                  <span>{item}</span>
-                  <span>{formatter.format(pricePerItem)}</span>
+                  <span>{item.title}</span>
+                  <span>{formatter.format(item.price)}</span>
                 </li>
               ))}
             </ul>
@@ -732,7 +745,7 @@ const Checkout = () => {
           <button
             className="checkout-primary"
             disabled={
-              effectiveCart.length === 0 ||
+              normalizedCart.length === 0 ||
               submitState.status === "loading" ||
               (mfaRequired && !mfaChecked)
             }
@@ -773,7 +786,7 @@ const Checkout = () => {
               </div>
               <div>
                 <span className="dialog-label">Items</span>
-                <span className="dialog-value">{effectiveCart.length}</span>
+                <span className="dialog-value">{normalizedCart.length}</span>
               </div>
             </div>
             <button
