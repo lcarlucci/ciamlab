@@ -242,7 +242,7 @@
 
 .story-steps {
   display: grid;
-  gap: 28px;
+  gap: 0;
   position: relative;
   padding-left: 26px;
 }
@@ -251,7 +251,7 @@
   content: "";
   position: absolute;
   left: 10px;
-  top: 8px;
+  top: 0;
   bottom: 8px;
   width: 1px;
   background: linear-gradient(180deg, rgba(134, 188, 37, 0.5), transparent 85%);
@@ -259,10 +259,7 @@
 
 .story-step {
   min-height: 70vh;
-  padding: 18px 0 18px 18px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+  padding: 0 0 72px 18px;
   position: relative;
   opacity: 0.6;
   transform: translateY(8px);
@@ -273,7 +270,7 @@
   content: "";
   position: absolute;
   left: -2px;
-  top: 34px;
+  top: 6px;
   width: 12px;
   height: 12px;
   border-radius: 50%;

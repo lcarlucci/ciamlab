@@ -27,37 +27,37 @@ const ApiTestComponent = () => {
       {
         id: "intro",
         eyebrow: "Capitolo 01",
-        title: "La nascita del token",
+        title: "Introduzione al JWT",
         body:
-          "Questo e il tuo JWT decodificato: una storia completa di identita, ruoli, permessi e scadenze. Scorri per mettere a fuoco ogni capitolo.",
+          "Un JWT e un token firmato composto da tre parti: header, payload e signature. Serve per trasferire in modo sicuro identita, audience, ruoli e scadenze senza mantenere stato lato server. In questa demo lo vedi decodificato e puoi capire come ogni campo viene usato dalla tua API.",
       },
       {
         id: "header",
         eyebrow: "Capitolo 02",
-        title: "Header: la chiave della fiducia",
+        title: "Header del JWT",
         body:
-          "Algoritmo, tipo e key id. Qui la tua API capisce come verificare la firma e quali chiavi usare.",
+          "Nell'header trovi alg, typ e kid. Indicano l'algoritmo di firma e quale chiave pubblica usare dal JWKS di Auth0. La tua API deve accettare solo algoritmi previsti e gestire la rotazione chiavi. Se non coincidono con le policy, la verifica deve fallire.",
       },
       {
         id: "payload",
         eyebrow: "Capitolo 03",
-        title: "Payload: identita e potere d'azione",
+        title: "Payload del JWT",
         body:
-          "Il cuore del token: audience, subject, ruoli, scope e tempi. E la sezione che decide cosa puoi fare.",
+          "Il payload contiene i claim che descrivono utente e permessi: iss, sub, aud, scope, roles e scadenze. E la base per autorizzazioni granulari, audit e tracciabilita. Qui l'API decide cosa puoi fare e per quanto tempo. I claim custom vanno namespacizzati e documentati.",
       },
       {
         id: "signature",
         eyebrow: "Capitolo 04",
-        title: "Signature: prova di integrita",
+        title: "Firma del JWT",
         body:
-          "La firma sigilla tutto. Se qualcuno altera il token, la tua API lo vede subito e blocca l'accesso.",
+          "La signature e il sigillo crittografico del token. Viene verificata con la chiave pubblica dell'issuer e impedisce manomissioni. La firma e generata con la chiave privata e la verifica e locale. Se anche un solo byte cambia, la firma non combacia.",
       },
       {
         id: "use",
         eyebrow: "Capitolo 05",
-        title: "Dal racconto all'azione",
+        title: "Uso del JWT in API",
         body:
-          "In produzione la verifica e locale e veloce: firma, audience e scadenze. Poi autorizzazioni basate su ruoli e permessi.",
+          "In produzione l'API valida firma, issuer e audience, poi controlla exp/nbf/iat. Infine applica scopes, ruoli e permissions per ogni endpoint. Conviene cache-are il JWKS e registrare i controlli per audit. E una verifica locale, veloce e deterministica.",
       },
     ],
     []
@@ -492,7 +492,11 @@ const ApiTestComponent = () => {
       return (
         <div className="signature-panel">
           <h4>Signature</h4>
-          <p>La firma garantisce che il token non sia stato alterato.</p>
+          <p>
+            La firma garantisce che il token non sia stato alterato e che provenga
+            davvero dall'issuer atteso. La verifica avviene con la chiave pubblica
+            pubblicata nel JWKS di Auth0.
+          </p>
           <div className="signature-pill">
             {tokenSignature || "Signature non disponibile"}
           </div>
@@ -504,6 +508,10 @@ const ApiTestComponent = () => {
       return (
         <div className="usage-panel">
           <h4>Come lo usa la tua API</h4>
+          <p>
+            La validazione avviene a ogni richiesta: prima sicurezza, poi autorizzazione.
+            Se qualcosa non torna, la richiesta viene rifiutata.
+          </p>
           <ul>
             <li>Valida la firma con Auth0 JWKS</li>
             <li>Controlla audience, scadenza e not-before</li>
@@ -533,13 +541,13 @@ const ApiTestComponent = () => {
       <header className="api-test-hero">
         <div className="hero-copy">
           <span className="hero-eyebrow">API Test Lab</span>
-          <h1>Il tuo JWT raccontato come una storia</h1>
+          <h1>Introduzione pratica al JWT</h1>
           <p>
-            Un singolo token, cinque capitoli. Scopri come Auth0 rende ogni parte chiara,
-            verificabile e pronta per la produzione.
+            Un token reale, scomposto in cinque sezioni. Scopri come Auth0 rende ogni parte
+            chiara, verificabile e pronta per l'uso in produzione.
           </p>
           <button className="hero-btn" onClick={callApi} disabled={!audience}>
-            Inizia la storia
+            Avvia demo JWT
           </button>
         </div>
         <div className="hero-glow" aria-hidden="true" />
