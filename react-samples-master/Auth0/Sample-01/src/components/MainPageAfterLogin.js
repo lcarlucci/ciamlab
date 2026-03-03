@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
+import { getConfig } from "../config";
 import "./style/MainPageAfterLogin.css";
 
 const MainPageAfterLogin = () => {
-  const { user } = useAuth0();
+  const { user, getAccessTokenSilently } = useAuth0();
   const navigate = useNavigate();
+  const { apiOrigin = "https://ciamlab.onrender.com", audience } = getConfig();
+  const apiBase = apiOrigin.replace(/\/+$/, "");
 
   const categories = [
     { id: "IGA", label: "Identity Governance", tooltip: "Manage user lifecycle, compliance and identity policies." },
@@ -72,6 +75,7 @@ const MainPageAfterLogin = () => {
   const numberFormatter = new Intl.NumberFormat("it-IT");
   const DEFAULT_IMPL = "New Implementation";
   const DEFAULT_USERS = 1000;
+  const PARTNER_DISCOUNT = 5000;
 
   const computeServicePrice = (service, users) => {
     const base = service?.basePrice ?? 12000;
@@ -130,6 +134,8 @@ const MainPageAfterLogin = () => {
   const [cartVisible, setCartVisible] = useState(false);
   const [activeCategory, setActiveCategory] = useState("IGA");
   const [serviceValues, setServiceValues] = useState({});
+  const [hasPartnerDiscount, setHasPartnerDiscount] = useState(false);
+  const [discountChecked, setDiscountChecked] = useState(false);
 
   const handleSliderChange = (serviceTitle, value) => {
     setServiceValues(prev => ({
@@ -181,6 +187,8 @@ const MainPageAfterLogin = () => {
   const openCart = () => setCartVisible(true);
   const toggleCart = () => setCartVisible((prev) => !prev);
   const cartSubtotal = cart.reduce((sum, item) => sum + (item.price || 0), 0);
+  const discountValue = hasPartnerDiscount ? PARTNER_DISCOUNT : 0;
+  const cartTotal = Math.max(cartSubtotal - discountValue, 0);
 
   const proceedToCheckout = () => {
     if (cart.length === 0) {
@@ -197,6 +205,44 @@ const MainPageAfterLogin = () => {
   useEffect(() => {
     localStorage.setItem("ciam_cart", JSON.stringify(cart));
   }, [cart]);
+
+  useEffect(() => {
+    if (!user || !audience) return;
+    let isMounted = true;
+
+    const loadRoles = async () => {
+      try {
+        const token = await getAccessTokenSilently({
+          authorizationParams: { audience },
+        });
+        const response = await fetch(`${apiBase}/api/user/roles`, {
+          headers: { authorization: `Bearer ${token}` },
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data?.message || "Unable to load roles.");
+        }
+        const roles = Array.isArray(data.roles) ? data.roles : [];
+        const partnerDiscount = roles.some(
+          (role) => String(role || "").trim().toLowerCase() === "sconto_partner"
+        );
+        if (isMounted) {
+          setHasPartnerDiscount(partnerDiscount);
+          setDiscountChecked(true);
+        }
+      } catch {
+        if (isMounted) {
+          setHasPartnerDiscount(false);
+          setDiscountChecked(true);
+        }
+      }
+    };
+
+    loadRoles();
+    return () => {
+      isMounted = false;
+    };
+  }, [user, audience, apiBase, getAccessTokenSilently]);
 
   return (
     <div className="main-container">
@@ -217,7 +263,9 @@ const MainPageAfterLogin = () => {
               <span className="cart-summary-label">Your cart</span>
               <span className="cart-summary-count">{cart.length}</span>
               <span className="cart-summary-text">
-                {cart.length === 0 ? "No items yet" : `Estimated ${formatter.format(cartSubtotal)}`}
+                {cart.length === 0
+                  ? "No items yet"
+                  : `Estimated ${formatter.format(cartTotal)}`}
               </span>
             </div>
           </div>
@@ -349,13 +397,25 @@ const MainPageAfterLogin = () => {
             <span>Subtotal</span>
             <strong>{formatter.format(cartSubtotal)}</strong>
           </div>
+          {hasPartnerDiscount && (
+            <div className="cart-total-row discount">
+              <span>Partner discount</span>
+              <strong>-{formatter.format(discountValue)}</strong>
+            </div>
+          )}
+          {!discountChecked && (
+            <div className="cart-total-row muted">
+              <span>Checking discounts</span>
+              <span>...</span>
+            </div>
+          )}
           <div className="cart-total-row muted">
             <span>Tax & fees</span>
             <span>Calculated at checkout</span>
           </div>
           <div className="cart-total-row total">
             <span>Total</span>
-            <strong>{formatter.format(cartSubtotal)}</strong>
+            <strong>{formatter.format(cartTotal)}</strong>
           </div>
           <button className="proceed" onClick={proceedToCheckout} disabled={cart.length === 0}>
             Proceed to checkout

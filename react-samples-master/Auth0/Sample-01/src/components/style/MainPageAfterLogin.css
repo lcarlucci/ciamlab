@@ -582,6 +582,11 @@
   font-size: 0.85rem;
 }
 
+.cart-total-row.discount {
+  color: #0f6a36;
+  font-weight: 700;
+}
+
 .cart-panel button.proceed {
   width: 100%;
   background-color: var(--brand);
