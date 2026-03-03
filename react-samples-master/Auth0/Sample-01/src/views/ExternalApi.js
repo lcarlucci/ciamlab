@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Button, Alert } from "reactstrap";
 import { useAuth0, withAuthenticationRequired } from "@auth0/auth0-react";
 import { getConfig } from "../config";
@@ -27,6 +27,7 @@ export const ExternalApiComponent = () => {
 
   const { getAccessTokenSilently, loginWithPopup, getAccessTokenWithPopup } =
     useAuth0();
+  const hasRequested = useRef(false);
 
   const tokenFieldLibrary = {
     iss: {
@@ -312,6 +313,12 @@ export const ExternalApiComponent = () => {
     return () => window.removeEventListener("scroll", handleScroll, true);
   }, []);
 
+  useEffect(() => {
+    if (!audience || hasRequested.current) return;
+    hasRequested.current = true;
+    callApi();
+  }, [audience]);
+
   const JwtExperience = () => {
     const decoded = tokenError ? null : { header: tokenHeader, payload: tokenPayload };
     return (
@@ -481,13 +488,9 @@ export const ExternalApiComponent = () => {
           </p>
         </div>
         <div className="api-hero-actions">
-          <Button
-            className="api-primary-btn"
-            onClick={callApi}
-            disabled={!audience}
-          >
-            Ping API &amp; genera token
-          </Button>
+          <p className="micro-copy">
+            Il token viene generato automaticamente all'apertura della pagina.
+          </p>
           <p className="micro-copy">Demo live: nessun mock, solo il tuo JWT firmato.</p>
         </div>
       </div>

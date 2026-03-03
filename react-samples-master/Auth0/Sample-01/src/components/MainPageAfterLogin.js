@@ -80,6 +80,8 @@ const MainPageAfterLogin = () => {
   };
 
   const removeFromCart = (item) => setCart(cart.filter(i => i !== item));
+  const openCart = () => setCartVisible(true);
+  const toggleCart = () => setCartVisible((prev) => !prev);
 
   const proceedToCheckout = () => {
     if (cart.length === 0) {
@@ -112,7 +114,7 @@ const MainPageAfterLogin = () => {
             <button className="primary-cta" onClick={proceedToCheckout}>
               Start with Governance
             </button>
-            <div className="cart-summary" onClick={proceedToCheckout} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && proceedToCheckout()}>
+            <div className="cart-summary" onClick={openCart} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && openCart()}>
               <span className="cart-summary-label">Your cart</span>
               <span className="cart-summary-count">{cart.length}</span>
               <span className="cart-summary-text">
@@ -187,26 +189,52 @@ const MainPageAfterLogin = () => {
         ))}
       </section>
 
+      {cartVisible && (
+        <div className="cart-overlay" onClick={toggleCart} role="presentation" />
+      )}
+
       <div className={`cart-panel ${cartVisible ? "show" : ""}`}>
-        <h3>My Cart</h3>
-        {cart.length === 0 && <p>Your cart is empty.</p>}
-        {cart.map((item, idx) => (
-          <div key={idx} className="cart-item">
-            <span>{item}</span>
-            <button onClick={() => removeFromCart(item)}>Remove</button>
+        <div className="cart-panel-header">
+          <div>
+            <span className="cart-panel-kicker">Cart</span>
+            <h3>My Cart</h3>
           </div>
-        ))}
-        {cart.length > 0 && (
-          <button className="proceed" onClick={proceedToCheckout}>
-            Proceed
+          <button className="cart-close" onClick={toggleCart} aria-label="Close cart">
+            Close
           </button>
-        )}
+        </div>
+
+        <div className="cart-panel-body">
+          {cart.length === 0 && (
+            <div className="cart-empty">
+              <p>Your cart is empty.</p>
+              <span>Add services to create a tailored IAM roadmap.</span>
+            </div>
+          )}
+          {cart.map((item, idx) => (
+            <div key={idx} className="cart-item">
+              <div className="cart-item-text">{item}</div>
+              <button onClick={() => removeFromCart(item)}>Remove</button>
+            </div>
+          ))}
+        </div>
+
+        <div className="cart-panel-footer">
+          <div className="cart-total">
+            <span>Items</span>
+            <strong>{cart.length}</strong>
+          </div>
+          <button className="proceed" onClick={proceedToCheckout} disabled={cart.length === 0}>
+            Proceed to checkout
+          </button>
+        </div>
       </div>
 
       <button
         className="cart-toggle-btn"
-        onClick={() => setCartVisible(!cartVisible)}
+        onClick={toggleCart}
         title="Toggle cart"
+        aria-expanded={cartVisible}
       >
         Cart
         <span className="cart-badge">{cart.length}</span>

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth0, withAuthenticationRequired } from "@auth0/auth0-react";
 import { getConfig } from "../config";
 import Loading from "../components/Loading";
@@ -26,35 +26,30 @@ const ApiTestComponent = () => {
     () => [
       {
         id: "intro",
-        eyebrow: "Capitolo 01",
         title: "Introduzione al JWT",
         body:
           "Un JWT e un token firmato composto da tre parti: header, payload e signature. Serve per trasferire in modo sicuro identita, audience, ruoli e scadenze senza mantenere stato lato server. In questa demo lo vedi decodificato e puoi capire come ogni campo viene usato dalla tua API.",
       },
       {
         id: "header",
-        eyebrow: "Capitolo 02",
         title: "Header del JWT",
         body:
           "Nell'header trovi alg, typ e kid. Indicano l'algoritmo di firma e quale chiave pubblica usare dal JWKS di Auth0. La tua API deve accettare solo algoritmi previsti e gestire la rotazione chiavi. Se non coincidono con le policy, la verifica deve fallire.",
       },
       {
         id: "payload",
-        eyebrow: "Capitolo 03",
         title: "Payload del JWT",
         body:
           "Il payload contiene i claim che descrivono utente e permessi: iss, sub, aud, scope, roles e scadenze. E la base per autorizzazioni granulari, audit e tracciabilita. Qui l'API decide cosa puoi fare e per quanto tempo. I claim custom vanno namespacizzati e documentati.",
       },
       {
         id: "signature",
-        eyebrow: "Capitolo 04",
         title: "Firma del JWT",
         body:
           "La signature e il sigillo crittografico del token. Viene verificata con la chiave pubblica dell'issuer e impedisce manomissioni. La firma e generata con la chiave privata e la verifica e locale. Se anche un solo byte cambia, la firma non combacia.",
       },
       {
         id: "use",
-        eyebrow: "Capitolo 05",
         title: "Uso del JWT in API",
         body:
           "In produzione l'API valida firma, issuer e audience, poi controlla exp/nbf/iat. Infine applica scopes, ruoli e permissions per ogni endpoint. Conviene cache-are il JWKS e registrare i controlli per audit. E una verifica locale, veloce e deterministica.",
@@ -62,6 +57,8 @@ const ApiTestComponent = () => {
     ],
     []
   );
+
+  const hasRequested = useRef(false);
 
   const tokenFieldLibrary = {
     iss: {
@@ -448,6 +445,12 @@ const ApiTestComponent = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (!audience || hasRequested.current) return;
+    hasRequested.current = true;
+    callApi();
+  }, [audience]);
+
   const renderStageContent = () => {
     if (tokenError) {
       return <div className="token-error">{tokenError}</div>;
@@ -541,13 +544,13 @@ const ApiTestComponent = () => {
       <header className="api-test-hero">
         <div className="hero-copy">
           <span className="hero-eyebrow">API Test Lab</span>
-          <h1>Introduzione pratica al JWT</h1>
+          <h1>Introduzione al JWT</h1>
           <p>
-            Un token reale, scomposto in cinque sezioni. Scopri come Auth0 rende ogni parte
+            Un token, scomposto in cinque sezioni. Scopri come Auth0 rende ogni parte
             chiara, verificabile e pronta per l'uso in produzione.
           </p>
           <button className="hero-btn" onClick={callApi} disabled={!audience}>
-            Avvia demo JWT
+            Rigenera token
           </button>
         </div>
         <div className="hero-glow" aria-hidden="true" />
@@ -557,8 +560,7 @@ const ApiTestComponent = () => {
         <div className="story-sticky">
           <div className={`token-stage step-${activeStep}`}>
             <div className="stage-header">
-              <span className="stage-label">{currentStep.eyebrow}</span>
-              <span className="stage-sub">{currentStep.title}</span>
+              <span className="stage-label">{currentStep.title}</span>
             </div>
             {renderStageContent()}
             {jwtTooltip.visible && (
@@ -580,7 +582,6 @@ const ApiTestComponent = () => {
               key={step.id}
               data-step={step.id}
             >
-              <span className="step-eyebrow">{step.eyebrow}</span>
               <h2>{step.title}</h2>
               <p>{step.body}</p>
             </section>
