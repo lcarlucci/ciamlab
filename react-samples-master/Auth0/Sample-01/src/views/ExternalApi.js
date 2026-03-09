@@ -17,6 +17,9 @@ export const ExternalApiComponent = () => {
   const [tokenPayload, setTokenPayload] = useState(null);
   const [tokenHeader, setTokenHeader] = useState(null);
   const [tokenError, setTokenError] = useState("");
+  const [idTokenPayload, setIdTokenPayload] = useState(null);
+  const [idTokenHeader, setIdTokenHeader] = useState(null);
+  const [idTokenError, setIdTokenError] = useState("");
   const [jwtTooltip, setJwtTooltip] = useState({
     visible: false,
     title: "",
@@ -25,7 +28,12 @@ export const ExternalApiComponent = () => {
     y: 0,
   });
 
-  const { getAccessTokenSilently, loginWithPopup, getAccessTokenWithPopup } =
+  const {
+    getAccessTokenSilently,
+    loginWithPopup,
+    getAccessTokenWithPopup,
+    getIdTokenClaims,
+  } =
     useAuth0();
   const hasRequested = useRef(false);
 
@@ -320,7 +328,45 @@ export const ExternalApiComponent = () => {
   }, [audience]);
 
   const JwtExperience = () => {
-    const decoded = tokenError ? null : { header: tokenHeader, payload: tokenPayload };
+    const hasAccessToken = Boolean(tokenHeader || tokenPayload);
+    const hasIdToken = Boolean(idTokenHeader || idTokenPayload);
+    const accessTokenDecoded = tokenError || !hasAccessToken
+      ? null
+      : { header: tokenHeader, payload: tokenPayload };
+    const idTokenDecoded = idTokenError || !hasIdToken
+      ? null
+      : { header: idTokenHeader, payload: idTokenPayload };
+
+    const renderTokenViewer = (decodedToken, error, ariaLabel) => {
+      if (error) {
+        return <div className="jwt-error">{error}</div>;
+      }
+
+      if (!decodedToken) {
+        return <div className="jwt-error">Token non disponibile.</div>;
+      }
+
+      return (
+        <div
+          className="jwt-json"
+          role="region"
+          aria-label={ariaLabel}
+          onMouseMove={updateTooltipFromEvent}
+          onMouseLeave={hideTooltip}
+        >
+          <div className="jwt-line">
+            <span className="jwt-indent" style={{ width: 0 }} />
+            <span className="jwt-brace">{"{"}</span>
+          </div>
+          {renderObjectEntries(decodedToken, 1, [])}
+          <div className="jwt-line">
+            <span className="jwt-indent" style={{ width: 0 }} />
+            <span className="jwt-brace">{"}"}</span>
+          </div>
+        </div>
+      );
+    };
+
     return (
       <section className="jwt-simple" data-testid="jwt-result">
         <div className="jwt-simple-header">
@@ -328,7 +374,7 @@ export const ExternalApiComponent = () => {
             <span className="jwt-kicker">JWT decoded view</span>
             <h3>Struttura del JWT spiegata in modo semplice</h3>
             <p>
-              Quando il token e disponibile, viene decodificato e mostrato come JSON leggibile.
+              Access token e ID token vengono mostrati separatamente, entrambi in formato JSON leggibile.
               Passa il mouse sui campi per capire il significato di ogni claim, anche se non sei tecnico.
             </p>
           </div>
@@ -336,32 +382,23 @@ export const ExternalApiComponent = () => {
 
         <div className="jwt-banner">
           <span className="jwt-banner-text">
-            Cos'e un JWT? Un contenitore firmato di dati e permessi, verificabile dall'API.
+            Access token per l'API e ID token per l'identita utente: due JWT distinti.
           </span>
         </div>
 
         <div className="jwt-viewer">
-          {tokenError ? (
-            <div className="jwt-error">{tokenError}</div>
-          ) : (
-            <div
-              className="jwt-json"
-              role="region"
-              aria-label="Decoded JWT"
-              onMouseMove={updateTooltipFromEvent}
-              onMouseLeave={hideTooltip}
-            >
-              <div className="jwt-line">
-                <span className="jwt-indent" style={{ width: 0 }} />
-                <span className="jwt-brace">{"{"}</span>
-              </div>
-              {renderObjectEntries(decoded || {}, 1, [])}
-              <div className="jwt-line">
-                <span className="jwt-indent" style={{ width: 0 }} />
-                <span className="jwt-brace">{"}"}</span>
-              </div>
-            </div>
-          )}
+          <div className="jwt-token-grid">
+            <article className="jwt-token-panel">
+              <h4>Access Token</h4>
+              <p>Usato per autorizzare la chiamata all'API.</p>
+              {renderTokenViewer(accessTokenDecoded, tokenError, "Decoded access token")}
+            </article>
+            <article className="jwt-token-panel">
+              <h4>ID Token</h4>
+              <p>Token identita utente, separato dall'access token.</p>
+              {renderTokenViewer(idTokenDecoded, idTokenError, "Decoded ID token")}
+            </article>
+          </div>
 
           {jwtTooltip.visible && (
             <div
@@ -447,6 +484,30 @@ export const ExternalApiComponent = () => {
         setTokenHeader(null);
         setTokenPayload(null);
         setTokenError(err?.message || "Unable to decode token.");
+      }
+
+      try {
+        const idTokenClaims = await getIdTokenClaims();
+        const rawIdToken = idTokenClaims?.__raw;
+
+        if (rawIdToken) {
+          const decodedIdToken = decodeJwt(rawIdToken);
+          setIdTokenHeader(decodedIdToken.header);
+          setIdTokenPayload(decodedIdToken.payload);
+          setIdTokenError("");
+        } else if (idTokenClaims) {
+          setIdTokenHeader(null);
+          setIdTokenPayload(idTokenClaims);
+          setIdTokenError("");
+        } else {
+          setIdTokenHeader(null);
+          setIdTokenPayload(null);
+          setIdTokenError("ID token non disponibile.");
+        }
+      } catch (err) {
+        setIdTokenHeader(null);
+        setIdTokenPayload(null);
+        setIdTokenError(err?.message || "Unable to load ID token.");
       }
 
       const response = await fetch(`${apiBase}/api/external`, {

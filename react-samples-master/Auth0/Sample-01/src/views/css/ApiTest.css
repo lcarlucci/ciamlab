@@ -274,8 +274,8 @@
 .story-step::before {
   content: "";
   position: absolute;
-  left: -2px;
-  top: 14px;
+  left: -20px;
+  top: 19px;
   width: 12px;
   height: 12px;
   border-radius: 50%;

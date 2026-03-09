@@ -179,6 +179,31 @@
   position: relative;
 }
 
+.jwt-token-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 14px;
+}
+
+.jwt-token-panel {
+  border: 1px solid rgba(15, 29, 18, 0.12);
+  border-radius: 14px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.jwt-token-panel h4 {
+  margin: 0;
+  font-size: 1.02rem;
+  color: #163117;
+}
+
+.jwt-token-panel p {
+  margin: 4px 0 10px;
+  color: var(--ink-muted);
+  font-size: 0.9rem;
+}
+
 .jwt-banner {
   margin-top: 10px;
   padding: 10px 14px;
