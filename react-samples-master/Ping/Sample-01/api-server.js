@@ -4,24 +4,29 @@ const morgan = require("morgan");
 const helmet = require("helmet");
 const path = require("path");
 const { auth } = require("express-oauth2-jwt-bearer");
+const authConfig = require("./src/auth_config.json");
 
-const authConfig = {
-  domain: "identity-auth0.cic-demo-platform.auth0app.com",
-  clientId: "Iwab1kMZj0fPOTZnWwtt5KI5yTBTOrLV",
-  audience: "https://ciamlab.onrender.com/audience",
-  appOrigin: "https://ciamlab.onrender.com",
-  apiOrigin: "https://ciamlab.onrender.com"
-};
+const auth0Config = authConfig.auth0 || {};
+const pingoneConfig = authConfig.pingone || {};
+
+const auth0Issuer = auth0Config.domain
+  ? `https://${auth0Config.domain}/`
+  : null;
+const pingoneIssuer = pingoneConfig.issuer || null;
 
 const app = express();
 
 // Render imposta il PORT con la variabile d'ambiente
 const PORT = process.env.PORT || 10000;
-const appOrigin = authConfig.appOrigin || `https://ciamlab.onrender.com`;
+const appOrigin = authConfig.appOrigin || "http://localhost:3000";
+const apiOrigin = authConfig.apiOrigin || "http://localhost:3001";
 
-if (!authConfig.domain || !authConfig.audience || authConfig.audience === "{API_IDENTIFIER}") {
+if (
+  (!auth0Issuer || !auth0Config.audience || auth0Config.audience === "{API_IDENTIFIER}") &&
+  (!pingoneIssuer || !pingoneConfig.audience || pingoneConfig.audience === "{PINGONE_API_RESOURCE}")
+) {
   console.log(
-    "Exiting: Please make sure that auth_config.json is in place and populated with valid domain and audience values"
+    "Exiting: Please make sure that auth_config.json has valid issuer and audience values for Auth0 or PingOne"
   );
   process.exit();
 }
@@ -29,16 +34,27 @@ if (!authConfig.domain || !authConfig.audience || authConfig.audience === "{API_
 app.use(morgan("dev"));
 //app.use(helmet()); <-- Originale
 //modifica
+const safeOrigin = (url) => {
+  try {
+    return new URL(url).origin;
+  } catch (err) {
+    return null;
+  }
+};
+
+const connectSrc = [
+  "'self'",
+  safeOrigin(auth0Issuer),
+  safeOrigin(pingoneIssuer),
+  `${apiOrigin}/*`,
+].filter(Boolean);
+
 app.use(
   helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        connectSrc: [
-          "'self'",
-          "https://identity-auth0.cic-demo-platform.auth0app.com",
-          "https://ciamlab.onrender.com/*"
-        ],
+        connectSrc,
         scriptSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", "data:", "https://*.googleusercontent.com", "https://*.giphy.com", "https://trevonix.com"],
         styleSrc: ["'self'", "'unsafe-inline'"]
@@ -50,11 +66,43 @@ app.use(
 app.use(cors({ origin: appOrigin }));
 
 // Middleware per autenticazione JWT
-const checkJwt = auth({
-  audience: authConfig.audience,
-  issuerBaseURL: `https://${authConfig.domain}/`,
-  algorithms: ["RS256"],
-});
+const checks = [];
+
+if (auth0Issuer && auth0Config.audience) {
+  checks.push(
+    auth({
+      audience: auth0Config.audience,
+      issuerBaseURL: auth0Issuer,
+      algorithms: ["RS256"],
+    })
+  );
+}
+
+if (pingoneIssuer && pingoneConfig.audience) {
+  checks.push(
+    auth({
+      audience: pingoneConfig.audience,
+      issuerBaseURL: pingoneIssuer,
+      algorithms: ["RS256"],
+    })
+  );
+}
+
+const checkJwt = (req, res, next) => {
+  if (checks.length === 0) {
+    return res.status(500).send({ msg: "JWT validation not configured." });
+  }
+
+  let index = 0;
+  const run = (err) => {
+    if (!err) return next();
+    index += 1;
+    if (index >= checks.length) return next(err);
+    return checks[index](req, res, run);
+  };
+
+  return checks[0](req, res, run);
+};
 
 // API protetta
 app.get("/api/external", checkJwt, (req, res) => {

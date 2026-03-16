@@ -1,45 +1,34 @@
 import React from "react";
-import { useAuth0, withAuthenticationRequired } from "@auth0/auth0-react";
-import Loading from "../components/Loading";
+import { useUnifiedAuth } from "../auth/AuthContext";
 import "./css/Profile.css";
 
-const DEBUG_BYPASS_AUTH = false;
-
 export const ProfileComponent = () => {
-  const { user, getAccessTokenSilently } = useAuth0();
-
-  const mockUser = {
-    picture: process.env.PUBLIC_URL + "/assets/placeholder.png",
-    name: "Test User",
-    email: "test@domain.com",
-  };
-
-  const currentUser = DEBUG_BYPASS_AUTH ? mockUser : user;
+  const { user, provider } = useUnifiedAuth();
 
   return (
     <div className="profile-container">
       <div className="profile-header">
         <img
-          src={currentUser?.picture || "/assets/placeholder.png"}
+          src={user?.picture || "/assets/placeholder.png"}
           alt="Profile"
           className="profile-picture"
         />
         <div className="profile-info">
-          <h2>{currentUser.toString()}</h2>
-          <p>Email: {currentUser.user}</p>
-          <p>Email verificata: {currentUser.email_verified}</p>
-          <p>Given Name: {currentUser.given_name}</p>
-          <p>Family Name: {currentUser.family_name}</p>
-          <p>Compleanno {currentUser.birthdate}</p>
-          <p>Info Zone: {currentUser.zoneinfo}</p>
-          <p>Telefono: {currentUser.phone_number}</p>
-          <p>Telefono Verificato: {currentUser.phone_number_verified}</p>
+          <h2>{user?.name || user?.preferred_username || "User"}</h2>
+          <p>Provider: {provider || "unknown"}</p>
+          <p>Email: {user?.email || "n/a"}</p>
+          <p>Email verificata: {String(user?.email_verified ?? "n/a")}</p>
+          <p>Given Name: {user?.given_name || "n/a"}</p>
+          <p>Family Name: {user?.family_name || "n/a"}</p>
+          <p>Compleanno {user?.birthdate || "n/a"}</p>
+          <p>Info Zone: {user?.zoneinfo || "n/a"}</p>
+          <p>Telefono: {user?.phone_number || "n/a"}</p>
+          <p>Telefono Verificato: {String(user?.phone_number_verified ?? "n/a")}</p>
         </div>
       </div>
+      <pre className="profile-json">{JSON.stringify(user, null, 2)}</pre>
     </div>
   );
 };
 
-export default withAuthenticationRequired(ProfileComponent, {
-  onRedirecting: () => <Loading />,
-});
+export default ProfileComponent;

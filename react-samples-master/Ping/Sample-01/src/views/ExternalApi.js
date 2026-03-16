@@ -1,12 +1,13 @@
 import React, { useState } from "react";
 import { Button, Alert } from "reactstrap";
 import Highlight from "../components/Highlight";
-import { useAuth0, withAuthenticationRequired } from "@auth0/auth0-react";
 import { getConfig } from "../config";
-import Loading from "../components/Loading";
+import { useUnifiedAuth } from "../auth/AuthContext";
 
 export const ExternalApiComponent = () => {
-  const { apiOrigin = "https://ciamlab.onrender.com", audience } = getConfig();
+  const { apiOrigin = "https://ciamlab.onrender.com", auth0, pingone } = getConfig();
+  const { provider, getAccessToken, loginWithAuth0, loginWithPingOne } = useUnifiedAuth();
+  const activeAudience = provider === "pingone" ? pingone.audience : auth0.audience;
 
   const [state, setState] = useState({
     showResult: false,
@@ -14,50 +15,20 @@ export const ExternalApiComponent = () => {
     error: null,
   });
 
-  const { getAccessTokenSilently, loginWithPopup, getAccessTokenWithPopup } =
-    useAuth0();
-
-  const handleConsent = async () => {
-    try {
-      await getAccessTokenWithPopup();
-      setState({
-        ...state,
-        error: null,
-      });
-    } catch (error) {
-      setState({
-        ...state,
-        error: error.error,
-      });
-    }
-
-    await callApi();
-  };
-
   const handleLoginAgain = async () => {
-    try {
-      await loginWithPopup();
-      setState({
-        ...state,
-        error: null,
-      });
-    } catch (error) {
-      setState({
-        ...state,
-        error: error.error,
-      });
+    if (provider === "pingone") {
+      await loginWithPingOne();
+      return;
     }
-
-    await callApi();
+    await loginWithAuth0();
   };
 
   const callApi = async () => {
   try {
-    const token = await getAccessTokenSilently({
-      audience: "https://ciamlab.onrender.com/audience",
-      scope: "openid profile email",
-
-    });
+    const token = await getAccessToken();
+    if (!token) {
+      throw new Error("Access token not available.");
+    }
 
     const response = await fetch(`${apiOrigin}/api/external`, {
       headers: {
@@ -89,25 +60,12 @@ export const ExternalApiComponent = () => {
   return (
     <>
       <div className="mb-5">
-        {state.error === "consent_required" && (
+        {state.error && (
           <Alert color="warning">
-            You need to{" "}
+            Token missing or session expired.{" "}
             <a
               href="#/"
-              class="alert-link"
-              onClick={(e) => handle(e, handleConsent)}
-            >
-              consent to get access to users api
-            </a>
-          </Alert>
-        )}
-
-        {state.error === "login_required" && (
-          <Alert color="warning">
-            You need to{" "}
-            <a
-              href="#/"
-              class="alert-link"
+              className="alert-link"
               onClick={(e) => handle(e, handleLoginAgain)}
             >
               log in again
@@ -127,7 +85,7 @@ export const ExternalApiComponent = () => {
           using the API's audience value.
         </p>
 
-        {!audience && (
+        {!activeAudience && (
           <Alert color="warning">
             <p>
               You can't call the API at the moment because your application does
@@ -177,7 +135,7 @@ export const ExternalApiComponent = () => {
           color="primary"
           className="mt-5"
           onClick={callApi}
-          disabled={!audience}
+          disabled={!activeAudience}
         >
           Ping API
         </Button>
@@ -197,6 +155,4 @@ export const ExternalApiComponent = () => {
   );
 };
 
-export default withAuthenticationRequired(ExternalApiComponent, {
-  onRedirecting: () => <Loading />,
-});
+export default ExternalApiComponent;

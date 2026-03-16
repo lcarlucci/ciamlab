@@ -1,9 +1,9 @@
 import React, { useState } from "react";
-import { useAuth0 } from "@auth0/auth0-react";
 import "./style/MainPageAfterLogin.css";
+import { useUnifiedAuth } from "../auth/AuthContext";
 
 const MainPageAfterLogin = () => {
-  const { user } = useAuth0();
+  const { user, provider } = useUnifiedAuth();
 
   const [cart, setCart] = useState([]);
   const [cartVisible, setCartVisible] = useState(false);
@@ -74,7 +74,9 @@ const MainPageAfterLogin = () => {
 
   return (
     <div className="main-container">
-      <h2 className="welcome-title">Welcome, {user.name}!</h2>
+      <h2 className="welcome-title">
+        Welcome, {user?.name || "User"}! {provider ? `(${provider})` : ""}
+      </h2>
 
       <nav className="service-menu">
         <ul>

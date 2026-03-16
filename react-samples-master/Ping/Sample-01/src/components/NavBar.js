@@ -1,10 +1,17 @@
 import React from "react";
-import { useAuth0 } from "@auth0/auth0-react";
 import { useNavigate } from "react-router-dom";
 import styles from "./style/NavBar.module.css";
+import { useUnifiedAuth } from "../auth/AuthContext";
 
 const Navbar = () => {
-  const { user, loginWithRedirect, logout, isAuthenticated } = useAuth0();
+  const {
+    user,
+    provider,
+    loginWithAuth0,
+    loginWithPingOne,
+    logout,
+    isAuthenticated,
+  } = useUnifiedAuth();
   const navigate = useNavigate();
 
   return (
@@ -41,31 +48,34 @@ const Navbar = () => {
               onClick={() => navigate("/profile")}
               style={{ cursor: "pointer" }}
             >
-              {user.name}
+              {user?.name || "User"}
             </span>
             <img
               className={styles.userPic}
-              src={user.picture || process.env.PUBLIC_URL + "/assets/placeholder.png"}
+              src={user?.picture || process.env.PUBLIC_URL + "/assets/placeholder.png"}
               alt="Profile"
               onClick={() => navigate("/profile")}
               style={{ cursor: "pointer" }}
             />
+            <span className={styles.providerBadge}>
+              {provider ? provider.toUpperCase() : "UNKNOWN"}
+            </span>
             <button
               className={styles.logoutBtn}
-              onClick={() => logout({ returnTo: window.location.origin })}
+              onClick={() => logout()}
             >
               Logout
             </button>
           </>
         ) : (
-          <button
-            className={styles.loginBtn}
-            onClick={() =>
-              loginWithRedirect({ appState: { returnTo: "/home" } })
-            }
-          >
-            Login
-          </button>
+          <div className={styles.authButtons}>
+            <button className={styles.loginBtn} onClick={loginWithAuth0}>
+              Login Auth0
+            </button>
+            <button className={styles.loginBtn} onClick={loginWithPingOne}>
+              Login PingOne
+            </button>
+          </div>
         )}
       </div>
     </header>

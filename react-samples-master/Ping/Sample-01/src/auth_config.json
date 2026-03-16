@@ -1,5 +1,18 @@
 {
-  "domain": "{DOMAIN}",
-  "clientId": "{CLIENT_ID}",
-  "audience": "{API_IDENTIFIER}"
+  "appOrigin": "http://localhost:3000",
+  "apiOrigin": "http://localhost:3001",
+  "auth0": {
+    "domain": "identity-auth0.cic-demo-platform.auth0app.com",
+    "clientId": "Iwab1kMZj0fPOTZnWwtt5KI5yTBTOrLV",
+    "audience": "https://identity-auth0.cic-demo-platform.auth0app.com/api/v2/",
+    "redirectUri": "http://localhost:3000/callback/auth0",
+    "postLogoutRedirectUri": "http://localhost:3000/"
+  },
+  "pingone": {
+    "issuer": "https://auth.pingone.eu/fd774213-4d1b-480b-a3eb-99e4fa328f82/as",
+    "clientId": "3c7a04ec-85d9-4997-b4f8-730a792fd88c",
+    "audience": "{PINGONE_API_RESOURCE}",
+    "redirectUri": "http://localhost:3000/callback/pingone",
+    "postLogoutRedirectUri": "http://localhost:3000/"
+  }
 }

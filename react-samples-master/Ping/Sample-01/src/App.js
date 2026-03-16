@@ -8,15 +8,17 @@ import Home from "./views/Home";
 import Profile from "./views/Profile";
 import MainPageAfterLogin from "./components/MainPageAfterLogin";
 import ExternalApi from "./views/ExternalApi";
-import { useAuth0 } from "@auth0/auth0-react";
 import ProtectedRoute from "./components/ProtectedRoute";
+import { useUnifiedAuth } from "./auth/AuthContext";
+import PingOneCallback from "./auth/PingOneCallback";
+import Auth0Callback from "./auth/Auth0Callback";
 
 import "./App.css";
 import initFontAwesome from "./utils/initFontAwesome";
 initFontAwesome();
 
 const App = () => {
-  const { error, isLoading } = useAuth0();
+  const { error, isLoading } = useUnifiedAuth();
 
   if (error) return <div>Oops... {error.message}</div>;
   if (isLoading) return <div>Loading...</div>;
@@ -26,6 +28,8 @@ const App = () => {
       <NavBar />
       <Container className="flex-grow-1 mt-5 px-0">
         <Routes>
+          <Route path="/callback/auth0" element={<Auth0Callback />} />
+          <Route path="/callback/pingone" element={<PingOneCallback />} />
           {/* Rotte protette */}
           <Route
             path="/home"

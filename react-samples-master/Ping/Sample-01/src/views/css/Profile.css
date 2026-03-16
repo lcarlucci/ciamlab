@@ -27,3 +27,12 @@
 .profile-container{
   font-family: "Aptos";
 }
+
+.profile-json {
+  margin-top: 16px;
+  background: #f7f7f7;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 0.85rem;
+  overflow-x: auto;
+}
