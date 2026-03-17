@@ -1,12 +1,14 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
+import {
+  Config,
+  TokenManager,
+  TokenStorage,
+  UserManager,
+} from "@forgerock/javascript-sdk";
 import { getConfig } from "../config";
-import { getPingOneManager } from "./pingoneClient";
 
 const ACTIVE_PROVIDER_KEY = "active_provider";
-const PINGONE_LOGIN_KEY = "pingone_login_in_progress";
-const PINGONE_LOGIN_TS_KEY = "pingone_login_ts";
-const PINGONE_LOGIN_TTL_MS = 10 * 60 * 1000;
 
 const AuthContext = createContext(null);
 
@@ -28,24 +30,38 @@ const resolveProvider = ({ activeProvider, auth0Authenticated, pingUser }) => {
   return null;
 };
 
+const extractAccessToken = (tokens) => {
+  if (!tokens) return "";
+  return (
+    tokens?.accessToken?.accessToken ||
+    tokens?.accessToken?.value ||
+    tokens?.accessToken ||
+    tokens?.access_token ||
+    ""
+  );
+};
+
 export const AuthProvider = ({ children }) => {
   const auth0 = useAuth0();
   const { auth0: auth0Config, pingone } = getConfig();
-  const pingManager = useMemo(() => getPingOneManager(pingone), [
-    pingone.issuer,
-    pingone.clientId,
-    pingone.redirectUri,
-    pingone.postLogoutRedirectUri,
-    pingone.scope,
-    pingone.audience,
-  ]);
 
   const [pingUser, setPingUser] = useState(null);
+  const [pingTokens, setPingTokens] = useState(null);
   const [pingLoading, setPingLoading] = useState(true);
   const [pingError, setPingError] = useState(null);
   const [activeProvider, setActiveProvider] = useState(
     () => window.localStorage.getItem(ACTIVE_PROVIDER_KEY)
   );
+
+  const pingoneSdkConfig = useMemo(() => {
+    if (!pingone.clientId || !pingone.wellKnown) return null;
+    return {
+      clientId: pingone.clientId,
+      serverConfig: { wellknown: pingone.wellKnown },
+      scope: pingone.scope || "openid profile email",
+      responseType: "code",
+    };
+  }, [pingone.clientId, pingone.wellKnown, pingone.scope]);
 
   const setActiveProviderLocal = (provider) => {
     setActiveProvider(provider);
@@ -56,49 +72,44 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const clearPingoneLoginFlag = () => {
-    window.localStorage.removeItem(PINGONE_LOGIN_KEY);
-    window.localStorage.removeItem(PINGONE_LOGIN_TS_KEY);
-  };
-
-  const isPingoneLoginInProgress = () => {
-    const raw = window.localStorage.getItem(PINGONE_LOGIN_KEY);
-    if (!raw) return false;
-    const ts = Number(window.localStorage.getItem(PINGONE_LOGIN_TS_KEY));
-    if (!Number.isFinite(ts)) {
-      clearPingoneLoginFlag();
-      return false;
+  useEffect(() => {
+    if (!pingoneSdkConfig) return;
+    try {
+      Config.set(pingoneSdkConfig);
+    } catch (err) {
+      setPingError(err);
     }
-    if (Date.now() - ts > PINGONE_LOGIN_TTL_MS) {
-      clearPingoneLoginFlag();
-      return false;
-    }
-    return true;
-  };
-
-  const setPingoneLoginInProgress = () => {
-    window.localStorage.setItem(PINGONE_LOGIN_KEY, "1");
-    window.localStorage.setItem(PINGONE_LOGIN_TS_KEY, String(Date.now()));
-  };
+  }, [pingoneSdkConfig]);
 
   useEffect(() => {
     let mounted = true;
-    pingManager
-      .getUser()
-      .then((user) => {
-        if (!mounted) return;
-        setPingUser(user);
-        setPingLoading(false);
-      })
-      .catch((err) => {
-        if (!mounted) return;
-        setPingError(err);
-        setPingLoading(false);
-      });
+    const hydrate = async () => {
+      if (!pingoneSdkConfig) {
+        if (mounted) setPingLoading(false);
+        return;
+      }
+      setPingLoading(true);
+      try {
+        const storedTokens = await TokenStorage.get();
+        if (storedTokens && mounted) {
+          setPingTokens(storedTokens);
+          const currentUser = await UserManager.getCurrentUser();
+          if (mounted) {
+            setPingUser(currentUser);
+            setPingError(null);
+          }
+        }
+      } catch (err) {
+        if (mounted) setPingError(err);
+      } finally {
+        if (mounted) setPingLoading(false);
+      }
+    };
+    hydrate();
     return () => {
       mounted = false;
     };
-  }, [pingManager]);
+  }, [pingoneSdkConfig]);
 
   useEffect(() => {
     if (!activeProvider) {
@@ -119,26 +130,15 @@ export const AuthProvider = ({ children }) => {
   };
 
   const loginWithPingOne = () => {
-    if (isPingoneLoginInProgress()) return null;
     setActiveProviderLocal("pingone");
-    setPingoneLoginInProgress();
-    pingManager.clearStaleState().catch(() => null);
-    return pingManager.signinRedirect();
+    window.location.assign("/login/pingone");
   };
 
-  const completePingOneLogin = async () => {
-    try {
-      const user = await pingManager.signinRedirectCallback();
-      setPingUser(user);
-      setPingError(null);
-      setActiveProviderLocal("pingone");
-      return user;
-    } catch (err) {
-      setPingError(err);
-      throw err;
-    } finally {
-      clearPingoneLoginFlag();
-    }
+  const setPingoneSession = ({ tokens, user }) => {
+    setPingTokens(tokens || null);
+    setPingUser(user || null);
+    setPingError(null);
+    setActiveProviderLocal("pingone");
   };
 
   const logout = async () => {
@@ -146,8 +146,18 @@ export const AuthProvider = ({ children }) => {
     setActiveProviderLocal(null);
     if (provider === "pingone") {
       setPingUser(null);
-      clearPingoneLoginFlag();
-      return pingManager.signoutRedirect();
+      setPingTokens(null);
+      try {
+        if (typeof TokenManager.deleteTokens === "function") {
+          await TokenManager.deleteTokens();
+        } else if (typeof TokenStorage.remove === "function") {
+          await TokenStorage.remove(pingone.clientId);
+        }
+      } catch (err) {
+        // ignore
+      }
+      window.location.assign(target);
+      return null;
     }
     if (provider === "auth0") {
       return auth0.logout({ logoutParams: { returnTo: target } });
@@ -163,8 +173,18 @@ export const AuthProvider = ({ children }) => {
       });
     }
     if (provider === "pingone") {
-      const user = pingUser || (await pingManager.getUser());
-      return user?.access_token || "";
+      if (!pingTokens) {
+        try {
+          const storedTokens = await TokenStorage.get();
+          if (storedTokens) {
+            setPingTokens(storedTokens);
+            return extractAccessToken(storedTokens);
+          }
+        } catch (err) {
+          return "";
+        }
+      }
+      return extractAccessToken(pingTokens);
     }
     return "";
   };
@@ -172,7 +192,7 @@ export const AuthProvider = ({ children }) => {
   const user =
     provider === "auth0"
       ? auth0.user
-      : normalizePingOneUser(pingUser?.profile);
+      : normalizePingOneUser(pingUser);
 
   const value = {
     provider,
@@ -184,7 +204,7 @@ export const AuthProvider = ({ children }) => {
     loginWithPingOne,
     logout,
     getAccessToken,
-    completePingOneLogin,
+    setPingoneSession,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

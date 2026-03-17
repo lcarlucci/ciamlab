@@ -5,6 +5,12 @@ const sanitize = (value) => {
   return value.startsWith("{") ? null : value;
 };
 
+const toWellKnown = (issuer) => {
+  if (!issuer) return null;
+  const trimmed = issuer.endsWith("/") ? issuer.slice(0, -1) : issuer;
+  return `${trimmed}/.well-known/openid-configuration`;
+};
+
 const resolveSameOriginUrl = (value, fallbackPath) => {
   const origin = window.location.origin;
   if (!value) return `${origin}${fallbackPath}`;
@@ -35,10 +41,13 @@ export function getConfig() {
     scope: configJson.auth0?.scope || "openid profile email",
   };
 
+  const pingoneIssuer = sanitize(configJson.pingone?.issuer);
   const pingone = {
-    issuer: sanitize(configJson.pingone?.issuer),
+    issuer: pingoneIssuer,
+    wellKnown: toWellKnown(pingoneIssuer),
     clientId: sanitize(configJson.pingone?.clientId),
     audience: sanitize(configJson.pingone?.audience),
+    flowId: sanitize(configJson.pingone?.flowId),
     redirectUri: resolveSameOriginUrl(
       configJson.pingone?.redirectUri,
       "/callback/pingone"

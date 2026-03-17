@@ -30,6 +30,7 @@ const App = () => {
         <Routes>
           <Route path="/callback/auth0" element={<Auth0Callback />} />
           <Route path="/callback/pingone" element={<PingOneCallback />} />
+          <Route path="/login/pingone" element={<PingOneCallback />} />
           {/* Rotte protette */}
           <Route
             path="/home"
