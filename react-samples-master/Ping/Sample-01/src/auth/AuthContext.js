@@ -64,13 +64,17 @@ export const AuthProvider = ({ children }) => {
     if (!pingone.clientId || !pingone.wellKnown) return null;
     return {
       clientId: pingone.clientId,
-      serverConfig: { wellknown: pingone.wellKnown },
+      serverConfig: {
+        wellknown: pingone.wellKnown,
+        baseUrl: pingone.davinciBaseUrl || undefined,
+      },
       scope: pingone.scope || "openid profile email",
       responseType: "code",
       redirectUri: pingone.redirectUri,
     };
   }, [
     pingone.clientId,
+    pingone.davinciBaseUrl,
     pingone.redirectUri,
     pingone.scope,
     pingone.wellKnown,

@@ -11,6 +11,15 @@ const toWellKnown = (issuer) => {
   return `${trimmed}/.well-known/openid-configuration`;
 };
 
+const toDavinciBaseUrl = (issuer) => {
+  if (!issuer) return null;
+  const trimmed = issuer.endsWith("/") ? issuer.slice(0, -1) : issuer;
+  if (trimmed.endsWith("/as")) {
+    return `${trimmed.slice(0, -3)}/davinci`;
+  }
+  return `${trimmed}/davinci`;
+};
+
 const resolveSameOriginUrl = (value, fallbackPath) => {
   const origin = window.location.origin;
   if (!value) return `${origin}${fallbackPath}`;
@@ -45,6 +54,7 @@ export function getConfig() {
   const pingone = {
     issuer: pingoneIssuer,
     wellKnown: toWellKnown(pingoneIssuer),
+    davinciBaseUrl: toDavinciBaseUrl(pingoneIssuer),
     clientId: sanitize(configJson.pingone?.clientId),
     audience: sanitize(configJson.pingone?.audience),
     flowId: sanitize(configJson.pingone?.flowId),
