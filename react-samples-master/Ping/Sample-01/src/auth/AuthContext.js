@@ -67,8 +67,14 @@ export const AuthProvider = ({ children }) => {
       serverConfig: { wellknown: pingone.wellKnown },
       scope: pingone.scope || "openid profile email",
       responseType: "code",
+      redirectUri: pingone.redirectUri,
     };
-  }, [pingone.clientId, pingone.wellKnown, pingone.scope]);
+  }, [
+    pingone.clientId,
+    pingone.redirectUri,
+    pingone.scope,
+    pingone.wellKnown,
+  ]);
 
   const setActiveProviderLocal = (provider) => {
     setActiveProvider(provider);
