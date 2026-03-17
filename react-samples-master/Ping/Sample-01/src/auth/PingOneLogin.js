@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { davinci } from "@forgerock/davinci-client";
 import { Config, TokenManager, UserManager } from "@forgerock/javascript-sdk";
@@ -8,10 +8,10 @@ import { useUnifiedAuth } from "./AuthContext";
 
 const getQueryParams = () => new URLSearchParams(window.location.search);
 
-const buildQuery = (pingone) => {
+const buildQuery = (audience, flowId) => {
   const query = {};
-  if (pingone.audience) query.resource = pingone.audience;
-  if (pingone.flowId) query.flowId = pingone.flowId;
+  if (audience) query.resource = audience;
+  if (flowId) query.flowId = flowId;
   return query;
 };
 
@@ -19,6 +19,8 @@ const PingOneLogin = () => {
   const navigate = useNavigate();
   const { setPingoneSession } = useUnifiedAuth();
   const { pingone } = getConfig();
+  const pingoneAudience = pingone.audience || null;
+  const pingoneFlowId = pingone.flowId || null;
 
   const [client, setClient] = useState(null);
   const [node, setNode] = useState(null);
@@ -35,7 +37,7 @@ const PingOneLogin = () => {
     };
   }, [pingone.clientId, pingone.wellKnown, pingone.scope]);
 
-  const handleSuccess = async (dvClient) => {
+  const handleSuccess = useCallback(async (dvClient) => {
     const info = dvClient?.getClient?.();
     const code = info?.authorization?.code;
     const state = info?.authorization?.state;
@@ -46,9 +48,9 @@ const PingOneLogin = () => {
     const user = await UserManager.getCurrentUser();
     setPingoneSession({ tokens, user });
     navigate("/home", { replace: true });
-  };
+  }, [navigate, setPingoneSession]);
 
-  const handleNode = async (nextNode, dvClient) => {
+  const handleNode = useCallback(async (nextNode, dvClient) => {
     if (!nextNode) return;
     setNode(nextNode);
     if (nextNode.status === "success") {
@@ -58,7 +60,7 @@ const PingOneLogin = () => {
       const dvError = dvClient?.getError?.();
       if (dvError) setError(dvError);
     }
-  };
+  }, [handleSuccess]);
 
   useEffect(() => {
     let mounted = true;
@@ -76,7 +78,7 @@ const PingOneLogin = () => {
         setClient(dvClient);
 
         const continueToken = getQueryParams().get("continueToken");
-        const query = buildQuery(pingone);
+        const query = buildQuery(pingoneAudience, pingoneFlowId);
         const hasQuery = Object.keys(query).length > 0;
         const nextNode = continueToken
           ? await dvClient.resume({ continueToken })
@@ -93,13 +95,12 @@ const PingOneLogin = () => {
     return () => {
       mounted = false;
     };
-  }, [sdkConfig, pingone.audience, pingone.flowId, navigate, setPingoneSession]);
+  }, [sdkConfig, pingoneAudience, pingoneFlowId, handleNode]);
 
-  const collectors = useMemo(() => {
-    if (!client) return [];
-    if (typeof client.getCollectors !== "function") return [];
-    return client.getCollectors() || [];
-  }, [client, node]);
+  const collectors =
+    client && typeof client.getCollectors === "function"
+      ? client.getCollectors() || []
+      : [];
 
   const hasSubmitCollector = collectors.some(
     (collector) => collector.type === "SubmitCollector"
