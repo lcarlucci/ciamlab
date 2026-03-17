@@ -4,6 +4,9 @@ import { getConfig } from "../config";
 import { getPingOneManager } from "./pingoneClient";
 
 const ACTIVE_PROVIDER_KEY = "active_provider";
+const PINGONE_LOGIN_KEY = "pingone_login_in_progress";
+const PINGONE_LOGIN_TS_KEY = "pingone_login_ts";
+const PINGONE_LOGIN_TTL_MS = 10 * 60 * 1000;
 
 const AuthContext = createContext(null);
 
@@ -53,6 +56,31 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const clearPingoneLoginFlag = () => {
+    window.localStorage.removeItem(PINGONE_LOGIN_KEY);
+    window.localStorage.removeItem(PINGONE_LOGIN_TS_KEY);
+  };
+
+  const isPingoneLoginInProgress = () => {
+    const raw = window.localStorage.getItem(PINGONE_LOGIN_KEY);
+    if (!raw) return false;
+    const ts = Number(window.localStorage.getItem(PINGONE_LOGIN_TS_KEY));
+    if (!Number.isFinite(ts)) {
+      clearPingoneLoginFlag();
+      return false;
+    }
+    if (Date.now() - ts > PINGONE_LOGIN_TTL_MS) {
+      clearPingoneLoginFlag();
+      return false;
+    }
+    return true;
+  };
+
+  const setPingoneLoginInProgress = () => {
+    window.localStorage.setItem(PINGONE_LOGIN_KEY, "1");
+    window.localStorage.setItem(PINGONE_LOGIN_TS_KEY, String(Date.now()));
+  };
+
   useEffect(() => {
     let mounted = true;
     pingManager
@@ -91,7 +119,10 @@ export const AuthProvider = ({ children }) => {
   };
 
   const loginWithPingOne = () => {
+    if (isPingoneLoginInProgress()) return null;
     setActiveProviderLocal("pingone");
+    setPingoneLoginInProgress();
+    pingManager.clearStaleState().catch(() => null);
     return pingManager.signinRedirect();
   };
 
@@ -105,6 +136,8 @@ export const AuthProvider = ({ children }) => {
     } catch (err) {
       setPingError(err);
       throw err;
+    } finally {
+      clearPingoneLoginFlag();
     }
   };
 
@@ -113,6 +146,7 @@ export const AuthProvider = ({ children }) => {
     setActiveProviderLocal(null);
     if (provider === "pingone") {
       setPingUser(null);
+      clearPingoneLoginFlag();
       return pingManager.signoutRedirect();
     }
     if (provider === "auth0") {

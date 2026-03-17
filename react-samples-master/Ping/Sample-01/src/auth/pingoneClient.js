@@ -9,6 +9,15 @@ export const getPingOneManager = (config) => {
     ? { resource: config.audience }
     : undefined;
 
+  const userStore = new WebStorageStateStore({
+    store: window.localStorage,
+    prefix: "pingone.user.",
+  });
+  const stateStore = new WebStorageStateStore({
+    store: window.localStorage,
+    prefix: "pingone.state.",
+  });
+
   userManager = new UserManager({
     authority: config.issuer,
     client_id: config.clientId,
@@ -17,7 +26,8 @@ export const getPingOneManager = (config) => {
     response_type: "code",
     scope: config.scope,
     extraQueryParams,
-    userStore: new WebStorageStateStore({ store: window.sessionStorage }),
+    userStore,
+    stateStore,
     loadUserInfo: true,
     automaticSilentRenew: false,
   });

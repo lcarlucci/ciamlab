@@ -5,16 +5,33 @@ const sanitize = (value) => {
   return value.startsWith("{") ? null : value;
 };
 
+const resolveSameOriginUrl = (value, fallbackPath) => {
+  const origin = window.location.origin;
+  if (!value) return `${origin}${fallbackPath}`;
+  try {
+    const url = new URL(value);
+    if (url.origin !== origin) {
+      return `${origin}${fallbackPath}`;
+    }
+    return value;
+  } catch (err) {
+    return `${origin}${fallbackPath}`;
+  }
+};
+
 export function getConfig() {
   const auth0 = {
     domain: sanitize(configJson.auth0?.domain),
     clientId: sanitize(configJson.auth0?.clientId),
     audience: sanitize(configJson.auth0?.audience),
-    redirectUri:
-      configJson.auth0?.redirectUri ||
-      `${window.location.origin}/callback/auth0`,
-    postLogoutRedirectUri:
-      configJson.auth0?.postLogoutRedirectUri || window.location.origin,
+    redirectUri: resolveSameOriginUrl(
+      configJson.auth0?.redirectUri,
+      "/callback/auth0"
+    ),
+    postLogoutRedirectUri: resolveSameOriginUrl(
+      configJson.auth0?.postLogoutRedirectUri,
+      "/"
+    ),
     scope: configJson.auth0?.scope || "openid profile email",
   };
 
@@ -22,11 +39,14 @@ export function getConfig() {
     issuer: sanitize(configJson.pingone?.issuer),
     clientId: sanitize(configJson.pingone?.clientId),
     audience: sanitize(configJson.pingone?.audience),
-    redirectUri:
-      configJson.pingone?.redirectUri ||
-      `${window.location.origin}/callback/pingone`,
-    postLogoutRedirectUri:
-      configJson.pingone?.postLogoutRedirectUri || window.location.origin,
+    redirectUri: resolveSameOriginUrl(
+      configJson.pingone?.redirectUri,
+      "/callback/pingone"
+    ),
+    postLogoutRedirectUri: resolveSameOriginUrl(
+      configJson.pingone?.postLogoutRedirectUri,
+      "/"
+    ),
     scope: configJson.pingone?.scope || "openid profile email",
   };
 
