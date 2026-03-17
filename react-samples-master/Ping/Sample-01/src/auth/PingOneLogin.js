@@ -1,7 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { davinci } from "@forgerock/davinci-client";
-import { Config, TokenManager, UserManager } from "@forgerock/javascript-sdk";
+import {
+  Config,
+  TokenManager,
+  TokenStorage,
+  UserManager,
+} from "@forgerock/javascript-sdk";
 import Loading from "../components/Loading";
 import { getConfig } from "../config";
 import { useUnifiedAuth } from "./AuthContext";
@@ -15,6 +20,22 @@ const buildQuery = (audience, flowId) => {
   return query;
 };
 
+const safeStringify = (value) => {
+  const seen = new WeakSet();
+  return JSON.stringify(
+    value,
+    (key, val) => {
+      if (typeof val === "object" && val !== null) {
+        if (seen.has(val)) return "[Circular]";
+        seen.add(val);
+      }
+      if (typeof val === "function") return "[Function]";
+      return val;
+    },
+    2
+  );
+};
+
 const PingOneLogin = () => {
   const navigate = useNavigate();
   const { setPingoneSession } = useUnifiedAuth();
@@ -26,6 +47,7 @@ const PingOneLogin = () => {
   const [node, setNode] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(true);
+  const [debugInfo, setDebugInfo] = useState(null);
 
   const sdkConfig = useMemo(() => {
     if (!pingone.clientId || !pingone.wellKnown) return null;
@@ -51,10 +73,28 @@ const PingOneLogin = () => {
     const info = dvClient?.getClient?.();
     const code = info?.authorization?.code;
     const state = info?.authorization?.state;
-    if (!code || !state) {
-      throw new Error("Missing authorization code/state from DaVinci");
+    setDebugInfo(
+      safeStringify({
+        stage: "handleSuccess",
+        authorization: info?.authorization || null,
+        client: info || null,
+      })
+    );
+    let tokens = null;
+    if (code && state) {
+      tokens = await TokenManager.getTokens({ query: { code, state } });
+    } else {
+      try {
+        tokens = await TokenStorage.get();
+      } catch (err) {
+        tokens = null;
+      }
     }
-    const tokens = await TokenManager.getTokens({ query: { code, state } });
+    if (!tokens) {
+      throw new Error(
+        "DaVinci success without authorization code or stored tokens. Check the PingOne Authentication node configuration."
+      );
+    }
     const user = await UserManager.getCurrentUser();
     setPingoneSession({ tokens, user });
     navigate("/home", { replace: true });
@@ -63,6 +103,14 @@ const PingOneLogin = () => {
   const handleNode = useCallback(async (nextNode, dvClient) => {
     if (!nextNode) return;
     setNode(nextNode);
+    setDebugInfo(
+      safeStringify({
+        stage: "handleNode",
+        nodeStatus: nextNode?.status || null,
+        node: nextNode || null,
+        client: dvClient?.getClient?.() || null,
+      })
+    );
     if (nextNode.status === "success") {
       await handleSuccess(dvClient);
     }
@@ -96,7 +144,16 @@ const PingOneLogin = () => {
         if (!mounted) return;
         await handleNode(nextNode, dvClient);
       } catch (err) {
-        if (mounted) setError(err);
+        if (mounted) {
+          setError(err);
+          setDebugInfo(
+            safeStringify({
+              stage: "initError",
+              message: err?.message || String(err),
+              stack: err?.stack || null,
+            })
+          );
+        }
       } finally {
         if (mounted) setBusy(false);
       }
@@ -206,6 +263,12 @@ const PingOneLogin = () => {
           </button>
         )}
       </form>
+      {debugInfo && (
+        <details className="mt-4">
+          <summary>Debug info</summary>
+          <pre className="mt-2">{debugInfo}</pre>
+        </details>
+      )}
     </div>
   );
 };
