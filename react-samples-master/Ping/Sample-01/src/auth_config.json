@@ -9,10 +9,10 @@
     "postLogoutRedirectUri": "http://localhost:3000/"
   },
   "pingone": {
-    "issuer": "https://auth.pingone.eu/fd774213-4d1b-480b-a3eb-99e4fa328f82/as",
+    "issuer": "https://auth.pingone.eu/f10f3f58-dd6e-423d-89de-514c3e6362f9/as",
     "clientId": "3c7a04ec-85d9-4997-b4f8-730a792fd88c",
-    "audience": "{PINGONE_API_RESOURCE}",
-    "redirectUri": "http://localhost:3000/callback/pingone",
-    "postLogoutRedirectUri": "http://localhost:3000/"
+    "audience": "4f0a7b8f-df5e-4347-87b6-1e6fad49a1a9",
+    "redirectUri": "https://ciamlab-ping.onrender.com/callback/pingone",
+    "postLogoutRedirectUri": "https://ciamlab-ping.onrender.com/"
   }
 }
