@@ -10,6 +10,7 @@ const config = getConfig();
 const auth0Config = config.auth0;
 
 const root = createRoot(document.getElementById("root"));
+const isPingOneCallback = window.location.pathname === "/callback/pingone";
 root.render(
   <BrowserRouter>
     <Auth0Provider
@@ -17,6 +18,7 @@ root.render(
       clientId={auth0Config.clientId}
       audience={auth0Config.audience || undefined}
       authorizationParams={{ redirect_uri: auth0Config.redirectUri }}
+      skipRedirectCallback={isPingOneCallback}
       cacheLocation="localstorage"
       useRefreshTokens={false}
       onRedirectCallback={(appState) => {
