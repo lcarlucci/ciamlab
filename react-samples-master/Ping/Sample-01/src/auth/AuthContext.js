@@ -1,4 +1,11 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import {
   Config,
@@ -72,12 +79,14 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  useEffect(() => {
-    if (!pingoneSdkConfig) return;
+  const ensurePingoneConfig = useCallback(() => {
+    if (!pingoneSdkConfig) return false;
     try {
       Config.set(pingoneSdkConfig);
+      return true;
     } catch (err) {
       setPingError(err);
+      return false;
     }
   }, [pingoneSdkConfig]);
 
@@ -90,6 +99,10 @@ export const AuthProvider = ({ children }) => {
       }
       setPingLoading(true);
       try {
+        if (!ensurePingoneConfig()) {
+          if (mounted) setPingLoading(false);
+          return;
+        }
         const storedTokens = await TokenStorage.get();
         if (storedTokens && mounted) {
           setPingTokens(storedTokens);
@@ -100,7 +113,13 @@ export const AuthProvider = ({ children }) => {
           }
         }
       } catch (err) {
-        if (mounted) setPingError(err);
+        if (mounted) {
+          if (err?.message === "Server configuration has not been set") {
+            setPingLoading(false);
+            return;
+          }
+          setPingError(err);
+        }
       } finally {
         if (mounted) setPingLoading(false);
       }
@@ -109,7 +128,7 @@ export const AuthProvider = ({ children }) => {
     return () => {
       mounted = false;
     };
-  }, [pingoneSdkConfig]);
+  }, [pingoneSdkConfig, ensurePingoneConfig]);
 
   useEffect(() => {
     if (!activeProvider) {
