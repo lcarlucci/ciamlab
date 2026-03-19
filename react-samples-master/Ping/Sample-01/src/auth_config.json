@@ -12,7 +12,7 @@
     "issuer": "https://auth.pingone.eu/fd774213-4d1b-480b-a3eb-99e4fa328f82/as",
     "clientId": "3c7a04ec-85d9-4997-b4f8-730a792fd88c",
     "audience": "https://ciamlab/api",
-    "flowId": "c3e6a164bde107954e93f5c09f0c8bce",
+    "flowId": "fd774213-4d1b-480b-a3eb-99e4fa328f82",
     "redirectUri": "https://ciamlab-1.onrender.com/callback/pingone",
     "postLogoutRedirectUri": "https://ciamlab-1.onrender.com"
   }
