@@ -20,6 +20,9 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 const appOrigin = authConfig.appOrigin || "http://localhost:3000";
 const apiOrigin = authConfig.apiOrigin || "http://localhost:3001";
+const pingoneClientId =
+  process.env.PINGONE_CLIENT_ID || pingoneConfig.clientId || null;
+const pingoneClientSecret = process.env.PINGONE_CLIENT_SECRET || null;
 
 if (
   (!auth0Issuer || !auth0Config.audience || auth0Config.audience === "{API_IDENTIFIER}") &&
@@ -32,6 +35,7 @@ if (
 }
 
 app.use(morgan("dev"));
+app.use(express.json());
 //app.use(helmet()); <-- Originale
 //modifica
 const safeOrigin = (url) => {
@@ -64,6 +68,39 @@ app.use(
 );
 //modifica
 app.use(cors({ origin: appOrigin }));
+
+let pingoneWellKnown = null;
+let pingoneWellKnownPromise = null;
+
+const getPingOneWellKnown = async () => {
+  if (!pingoneIssuer) {
+    throw new Error("PingOne issuer missing in auth_config.json.");
+  }
+  if (pingoneWellKnown) return pingoneWellKnown;
+  if (!pingoneWellKnownPromise) {
+    const wellKnownUrl = pingoneIssuer.endsWith("/")
+      ? `${pingoneIssuer}.well-known/openid-configuration`
+      : `${pingoneIssuer}/.well-known/openid-configuration`;
+    pingoneWellKnownPromise = fetch(wellKnownUrl)
+      .then(async (res) => {
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(
+            `PingOne well-known fetch failed: ${res.status} ${text}`
+          );
+        }
+        return res.json();
+      })
+      .then((json) => {
+        pingoneWellKnown = json;
+        return json;
+      })
+      .finally(() => {
+        pingoneWellKnownPromise = null;
+      });
+  }
+  return pingoneWellKnownPromise;
+};
 
 // Middleware per autenticazione JWT
 const checks = [];
@@ -103,6 +140,73 @@ const checkJwt = (req, res, next) => {
 
   return checks[0](req, res, run);
 };
+
+// Token exchange (PingOne confidential client)
+app.post("/api/pingone/token", async (req, res) => {
+  try {
+    const { code, redirectUri, codeVerifier } = req.body || {};
+    if (!code || !redirectUri) {
+      return res.status(400).json({
+        error: "Missing code or redirectUri.",
+      });
+    }
+    if (!pingoneClientId || !pingoneClientSecret) {
+      return res.status(500).json({
+        error:
+          "PingOne confidential client not configured. Set PINGONE_CLIENT_ID and PINGONE_CLIENT_SECRET.",
+      });
+    }
+
+    const wellKnown = await getPingOneWellKnown();
+    const tokenEndpoint = wellKnown?.token_endpoint;
+    if (!tokenEndpoint) {
+      return res.status(500).json({
+        error: "PingOne token endpoint not available.",
+      });
+    }
+
+    const body = new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: redirectUri,
+      client_id: pingoneClientId,
+      client_secret: pingoneClientSecret,
+    });
+    if (codeVerifier) {
+      body.set("code_verifier", codeVerifier);
+    }
+
+    const tokenRes = await fetch(tokenEndpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body,
+    });
+    const tokenText = await tokenRes.text();
+    let tokenJson = null;
+    try {
+      tokenJson = JSON.parse(tokenText);
+    } catch (err) {
+      tokenJson = null;
+    }
+    if (!tokenRes.ok) {
+      return res.status(tokenRes.status).json({
+        error:
+          tokenJson?.error_description ||
+          tokenJson?.error ||
+          "Token exchange failed.",
+        details: tokenJson || tokenText,
+      });
+    }
+    res.set("Cache-Control", "no-store");
+    return res.json({ tokens: tokenJson });
+  } catch (err) {
+    return res.status(500).json({
+      error: err?.message || "Token exchange failed.",
+    });
+  }
+});
 
 // API protetta
 app.get("/api/external", checkJwt, (req, res) => {

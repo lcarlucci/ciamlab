@@ -1,19 +1,19 @@
 import React, {
   createContext,
-  useCallback,
   useContext,
   useEffect,
-  useMemo,
   useState,
 } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
-import {
-  Config,
-  TokenManager,
-  TokenStorage,
-  UserManager,
-} from "@forgerock/javascript-sdk";
 import { getConfig } from "../config";
+import {
+  buildUserFromTokens,
+  clearPingSession,
+  readPingTokens,
+  readPingUser,
+  writePingTokens,
+  writePingUser,
+} from "./pingoneStorage";
 
 const ACTIVE_PROVIDER_KEY = "active_provider";
 
@@ -60,25 +60,7 @@ export const AuthProvider = ({ children }) => {
     () => window.localStorage.getItem(ACTIVE_PROVIDER_KEY)
   );
 
-  const pingoneSdkConfig = useMemo(() => {
-    if (!pingone.clientId || !pingone.wellKnown) return null;
-    return {
-      clientId: pingone.clientId,
-      serverConfig: {
-        wellknown: pingone.wellKnown,
-        baseUrl: pingone.davinciBaseUrl || undefined,
-      },
-      scope: pingone.scope || "openid profile email",
-      responseType: "code",
-      redirectUri: pingone.redirectUri,
-    };
-  }, [
-    pingone.clientId,
-    pingone.davinciBaseUrl,
-    pingone.redirectUri,
-    pingone.scope,
-    pingone.wellKnown,
-  ]);
+  const pingoneReady = Boolean(pingone.clientId);
 
   const setActiveProviderLocal = (provider) => {
     setActiveProvider(provider);
@@ -89,45 +71,25 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const ensurePingoneConfig = useCallback(() => {
-    if (!pingoneSdkConfig) return false;
-    try {
-      Config.set(pingoneSdkConfig);
-      return true;
-    } catch (err) {
-      setPingError(err);
-      return false;
-    }
-  }, [pingoneSdkConfig]);
-
   useEffect(() => {
     let mounted = true;
     const hydrate = async () => {
-      if (!pingoneSdkConfig) {
+      if (!pingoneReady) {
         if (mounted) setPingLoading(false);
         return;
       }
       setPingLoading(true);
       try {
-        if (!ensurePingoneConfig()) {
-          if (mounted) setPingLoading(false);
-          return;
-        }
-        const storedTokens = await TokenStorage.get();
+        const storedTokens = readPingTokens(pingone.clientId);
         if (storedTokens && mounted) {
+          const storedUser =
+            readPingUser(pingone.clientId) || buildUserFromTokens(storedTokens);
           setPingTokens(storedTokens);
-          const currentUser = await UserManager.getCurrentUser();
-          if (mounted) {
-            setPingUser(currentUser);
-            setPingError(null);
-          }
+          setPingUser(storedUser);
+          setPingError(null);
         }
       } catch (err) {
         if (mounted) {
-          if (err?.message === "Server configuration has not been set") {
-            setPingLoading(false);
-            return;
-          }
           setPingError(err);
         }
       } finally {
@@ -138,7 +100,7 @@ export const AuthProvider = ({ children }) => {
     return () => {
       mounted = false;
     };
-  }, [pingoneSdkConfig, ensurePingoneConfig]);
+  }, [pingone.clientId, pingoneReady]);
 
   useEffect(() => {
     if (!activeProvider) {
@@ -164,10 +126,15 @@ export const AuthProvider = ({ children }) => {
   };
 
   const setPingoneSession = ({ tokens, user }) => {
-    setPingTokens(tokens || null);
-    setPingUser(user || null);
+    const resolvedTokens = tokens || null;
+    const resolvedUser =
+      user || buildUserFromTokens(resolvedTokens) || null;
+    setPingTokens(resolvedTokens);
+    setPingUser(resolvedUser);
     setPingError(null);
     setActiveProviderLocal("pingone");
+    writePingTokens(pingone.clientId, resolvedTokens);
+    writePingUser(pingone.clientId, resolvedUser);
   };
 
   const logout = async () => {
@@ -176,15 +143,7 @@ export const AuthProvider = ({ children }) => {
     if (provider === "pingone") {
       setPingUser(null);
       setPingTokens(null);
-      try {
-        if (typeof TokenManager.deleteTokens === "function") {
-          await TokenManager.deleteTokens();
-        } else if (typeof TokenStorage.remove === "function") {
-          await TokenStorage.remove(pingone.clientId);
-        }
-      } catch (err) {
-        // ignore
-      }
+      clearPingSession(pingone.clientId);
       window.location.assign(target);
       return null;
     }
@@ -203,15 +162,12 @@ export const AuthProvider = ({ children }) => {
     }
     if (provider === "pingone") {
       if (!pingTokens) {
-        try {
-          const storedTokens = await TokenStorage.get();
-          if (storedTokens) {
-            setPingTokens(storedTokens);
-            return extractAccessToken(storedTokens);
-          }
-        } catch (err) {
-          return "";
+        const storedTokens = readPingTokens(pingone.clientId);
+        if (storedTokens) {
+          setPingTokens(storedTokens);
+          return extractAccessToken(storedTokens);
         }
+        return "";
       }
       return extractAccessToken(pingTokens);
     }

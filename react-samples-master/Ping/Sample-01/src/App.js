@@ -11,6 +11,7 @@ import ExternalApi from "./views/ExternalApi";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { useUnifiedAuth } from "./auth/AuthContext";
 import PingOneCallback from "./auth/PingOneCallback";
+import PingOneLogin from "./auth/PingOneLogin";
 import Auth0Callback from "./auth/Auth0Callback";
 
 import "./App.css";
@@ -30,7 +31,7 @@ const App = () => {
         <Routes>
           <Route path="/callback/auth0" element={<Auth0Callback />} />
           <Route path="/callback/pingone" element={<PingOneCallback />} />
-          <Route path="/login/pingone" element={<PingOneCallback />} />
+          <Route path="/login/pingone" element={<PingOneLogin />} />
           {/* Rotte protette */}
           <Route
             path="/home"

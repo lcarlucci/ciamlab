@@ -10,9 +10,9 @@
   },
   "pingone": {
     "issuer": "https://auth.pingone.eu/fd774213-4d1b-480b-a3eb-99e4fa328f82/as",
-    "clientId": "18884c77d7f898cf9bec741ddbb70c3c",
+    "clientId": "fc2a1e1b-aa26-46dd-b3ba-d6cafa85d64c",
     "audience": "https://ciamlab/api",
-    "flowId": "728b253a64b8f9934ece98a8709d22e1",
+    "flowId": "cd5d3820b9e475353e07b5677200e90c",
     "redirectUri": "https://ciamlab-1.onrender.com/callback/pingone",
     "postLogoutRedirectUri": "https://ciamlab-1.onrender.com"
   }
